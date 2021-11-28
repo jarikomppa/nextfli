@@ -31,6 +31,7 @@ int gHalfRes = 0;
 int gPointSample = 0;
 int gDither = 1;
 int gExtendedBlocks = 1;
+int gClassicBlocks = 1;
 int gSlowBlocks = 1;
 
 class AddFrameTask : public Thread::PoolTask
@@ -397,13 +398,19 @@ public:
 			}
 		}
 
-		mFrame->mFrameData = new unsigned char[pixels*2];
-		mFrame->mFrameDataSize = encodeRLEFrame(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-		if (mFrame->mFrameDataSize > pixels) printf("overlong rle: %d +%d\n", mFrame->mFrameDataSize, mFrame->mFrameDataSize-pixels);
-		mFrame->mFrameType = RLEFRAME;
-		verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-		unsigned char* data;
-		int len;
+		unsigned char* data = 0;
+		int len = 0;
+		mFrame->mFrameData = 0;
+		mFrame->mFrameDataSize = 0xffffff;
+
+		if (gClassicBlocks)
+		{
+			mFrame->mFrameData = new unsigned char[pixels * 2];
+			mFrame->mFrameDataSize = encodeRLEFrame(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+			if (mFrame->mFrameDataSize > pixels) printf("overlong rle: %d +%d\n", mFrame->mFrameDataSize, mFrame->mFrameDataSize - pixels);
+			mFrame->mFrameType = RLEFRAME;
+			verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+		}
 
 		if (gExtendedBlocks)
 		{
@@ -496,42 +503,80 @@ public:
 					{
 						delete[] data;
 					}
+
+					data = new unsigned char[pixels * 2];
+					len = encodeLZ2Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+					if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
+
+					if (len < mFrame->mFrameDataSize)
+					{
+						delete[] mFrame->mFrameData;
+						mFrame->mFrameData = data;
+						mFrame->mFrameDataSize = len;
+						mFrame->mFrameType = LZ2;
+						verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					}
+					else
+					{
+						delete[] data;
+					}
+				}
+
+				data = new unsigned char[pixels * 2];
+				len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+				if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
+
+				if (len < mFrame->mFrameDataSize)
+				{
+					delete[] mFrame->mFrameData;
+					mFrame->mFrameData = data;
+					mFrame->mFrameDataSize = len;
+					mFrame->mFrameType = LZ3;
+					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				}
+				else
+				{
+					delete[] data;
 				}
 			}
-
-			data = new unsigned char[pixels*2];
-			len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-			if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
-
-			if (len < mFrame->mFrameDataSize)
+		
+			if (gClassicBlocks)
 			{
-				delete[] mFrame->mFrameData;
-				mFrame->mFrameData = data;
-				mFrame->mFrameDataSize = len;
-				mFrame->mFrameType = DELTA8FRAME;
-				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-			}
-			else
-			{
-				delete[] data;
-			}
+				data = new unsigned char[pixels * 2];
+				len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+				if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
 
-			data = new unsigned char[pixels*2];
-			len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-			if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
+				if (len < mFrame->mFrameDataSize)
+				{
+					delete[] mFrame->mFrameData;
+					mFrame->mFrameData = data;
+					mFrame->mFrameDataSize = len;
+					mFrame->mFrameType = DELTA8FRAME;
+					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				}
+				else
+				{
+					delete[] data;
+				}
 
-			if (len < mFrame->mFrameDataSize)
-			{
-				delete[] mFrame->mFrameData;
-				mFrame->mFrameData = data;
-				mFrame->mFrameDataSize = len;
-				mFrame->mFrameType = DELTA16FRAME;
-				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				data = new unsigned char[pixels * 2];
+				len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+				if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
+
+				if (len < mFrame->mFrameDataSize)
+				{
+					delete[] mFrame->mFrameData;
+					mFrame->mFrameData = data;
+					mFrame->mFrameDataSize = len;
+					mFrame->mFrameType = DELTA16FRAME;
+					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				}
+				else
+				{
+					delete[] data;
+				}
 			}
-			else
-			{
-				delete[] data;
-			}
+			
 		}
 
 		// TODO: start frame from solid fill - pretty much same as linear-rle..
@@ -605,6 +650,8 @@ void output(FliHeader& header, FILE* outfile)
 		case LINEARDELTA8:printf("e"); break;
 		case LINEARDELTA16:printf("E"); break;
 		case LZ1:printf("1"); break;
+		case LZ2:printf("2"); break;
+		case LZ3:printf("3"); break;
 		default: printf("?!?\n");
 		}
 		if (walker->mFrameDataSize > framemaxsize[walker->mFrameType]) framemaxsize[walker->mFrameType] = walker->mFrameDataSize;
@@ -617,19 +664,21 @@ void output(FliHeader& header, FILE* outfile)
 	printf("\nTotal %d bytes (%d kB, %d MB)\n", total, total/1024, total/(1024*1024));
 	printf("Compression ratio %3.3f%%\n", 100 * total / (float)(frames * header.mWidth * header.mWidth));
 	printf("\nBlock types:\n");
-	if (framecounts[1]) printf("sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
-	if (framecounts[2]) printf("blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);
-	if (framecounts[3]) printf("rleframe      %5d (%5d -%5d bytes)\n", framecounts[3], frameminsize[3], framemaxsize[3]);
-	if (framecounts[4]) printf("delta8frame   %5d (%5d -%5d bytes)\n", framecounts[4], frameminsize[4], framemaxsize[4]);
-	if (framecounts[5]) printf("delta16frame  %5d (%5d -%5d bytes)\n", framecounts[5], frameminsize[5], framemaxsize[5]);
+	if (framecounts[1]) printf("s sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
+	if (framecounts[2]) printf("b blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);
+	if (framecounts[3]) printf("r rleframe      %5d (%5d -%5d bytes)\n", framecounts[3], frameminsize[3], framemaxsize[3]);
+	if (framecounts[4]) printf("d delta8frame   %5d (%5d -%5d bytes)\n", framecounts[4], frameminsize[4], framemaxsize[4]);
+	if (framecounts[5]) printf("D delta16frame  %5d (%5d -%5d bytes)\n", framecounts[5], frameminsize[5], framemaxsize[5]);
 	printf("-- extended blocks --\n");
-	if (framecounts[6]) printf("onecolor      %5d (%5d -%5d bytes)\n", framecounts[6], frameminsize[6], framemaxsize[6]);
-	if (framecounts[7]) printf("linearrle8    %5d (%5d -%5d bytes)\n", framecounts[7], frameminsize[7], framemaxsize[7]);
-	if (framecounts[8]) printf("linearrle16   %5d (%5d -%5d bytes)\n", framecounts[8], frameminsize[8], framemaxsize[8]);
-	if (framecounts[9]) printf("lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[9], frameminsize[9], framemaxsize[9]);
-	if (framecounts[10]) printf("lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
-	if (framecounts[11]) printf("lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
-	
+	if (framecounts[6]) printf("o onecolor      %5d (%5d -%5d bytes)\n", framecounts[6], frameminsize[6], framemaxsize[6]);
+	if (framecounts[7]) printf("l linearrle8    %5d (%5d -%5d bytes)\n", framecounts[7], frameminsize[7], framemaxsize[7]);
+	if (framecounts[8]) printf("L linearrle16   %5d (%5d -%5d bytes)\n", framecounts[8], frameminsize[8], framemaxsize[8]);
+	if (framecounts[9]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[9], frameminsize[9], framemaxsize[9]);
+	if (framecounts[10]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
+	if (framecounts[11]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
+	if (framecounts[12]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
+	if (framecounts[13]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+
 	header.mSize = ftell(outfile);
 
 	fseek(outfile, 0, SEEK_SET);
