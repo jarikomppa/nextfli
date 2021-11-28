@@ -1,0 +1,10 @@
+*.flc
+ba/
+ba_hvy/
+*.filters
+*.user
+nextfli/.vs/
+nextfli/Debug/
+nextfli/Release/
+nextfli/x64/
+ref/

@@ -29,7 +29,7 @@ int frames = 2037;
 Frame* gRoot = NULL, * gLast = NULL;
 int gHalfRes = 0;
 int gPointSample = 0;
-int gDither = 0;
+int gDither = 1;
 int gExtendedBlocks = 1;
 int gSlowBlocks = 1;
 
@@ -257,27 +257,41 @@ public:
 void quantize(const FliHeader& header)
 {
 	auto start = std::chrono::steady_clock::now();
-	Frame* walker = gRoot;
-	unsigned int colors[512];
-	memset(colors, 0xff, 512 * sizeof(unsigned int));
+	unsigned int *framecolors;
+	framecolors = new unsigned int[512 * header.mFrames];
+	memset(framecolors, 0xff, 512 * sizeof(unsigned int) * header.mFrames);
 	printf("Dithering and reducing..\n");
 	Thread::Pool threadpool;
 	threadpool.init(24);
 
+	Frame* walker = gRoot;
+	unsigned int* cw = framecolors;
 	while (walker)
 	{
-		QuantizeTask* t = new QuantizeTask(walker, header, colors);
+		QuantizeTask* t = new QuantizeTask(walker, header, cw);
 		t->mDeleteTask = 1;
 		threadpool.addWork(t);
 		walker = walker->mNext;
+		cw += 512;
 	}
 
 	printf("Waiting for threads..\n");
 	threadpool.waitUntilDone();
 
+	int colors[512];
+	memset(colors, 0xff, 512 * sizeof(unsigned int));
+	for (int i = 0; i < header.mFrames; i++)
+		for (int j = 0; j < 512; j++)
+			if (framecolors[i * 512 + j] != 0xffffffff)
+				colors[j] = framecolors[i * 512 + j];
+	delete[] framecolors;
+
 	int cc = 0;
 	for (int i = 0; i < 512; i++)
-		if (colors[i] != 0xffffffff) cc++;
+		if (colors[i] != 0xffffffff)
+			cc++;
+		else
+			colors[i] = 0;
 	printf("%d unique colors\n", cc + 1);
 
 	auto end = std::chrono::steady_clock::now();

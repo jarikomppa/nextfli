@@ -290,8 +290,9 @@ int encodeDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char
 			break;
 		if (skip)
 		{
-			data[ofs++] = skip & 0xff;
-			data[ofs++] = ((skip >> 8) & 0xff) | 0xc0;
+			unsigned short s = -skip;
+			data[ofs++] = s & 0xff;
+			data[ofs++] = ((s >> 8) & 0xff);
 		}
 		row += skip;
 		if (row < height)

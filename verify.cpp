@@ -116,7 +116,7 @@ int decode_delta16frame(unsigned char* buf, unsigned char* data, int datalen, in
 			{          // Has bit 15 (0x8000)
 				if (word & 0x4000) 
 				{      // Has bit 14 (0x4000)
-					y += word & 0xff;          // Skip lines
+					y += -word;          // Skip lines
 				}
 				// Only last pixel has changed
 				else 
