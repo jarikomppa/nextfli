@@ -85,18 +85,13 @@ int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aP
 		if (skip > 255) skip = 255;
 		aOut[ofs++] = skip;
 		inp += skip;
-		// can we run; interrupt run if we can skip at least 4 bytes
+		// can we run
 		int l = 0;
 		while ((inp + l < width) &&
-			aSrc[inp + l] == aSrc[inp] &&
-			!(inp + l + 3 < width &&
-				aSrc[inp + l] == aPrev[inp + l] &&
-				aSrc[inp + l + 1] == aPrev[inp + l + 1] &&
-				aSrc[inp + l + 2] == aPrev[inp + l + 2] &&
-				aSrc[inp + l + 3] == aPrev[inp + l + 3])) 
+			aSrc[inp + l] == aSrc[inp]) 
 			l++;
 
-		if (l > 3)
+		if (l > 2)
 		{
 			// encode run
 			if (l > 128) l = 128;
@@ -109,16 +104,14 @@ int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aP
 			// find out how much we need to copy
 			int p = inp;
 			l = 0;
-			// interrupt copy if a run or skip of at least 4 bytes is found
-			while ((p + 4) < width &&
+			// interrupt copy if a run or skip of at least 3 bytes is found
+			while ((p + 3) < width &&
 				!(aSrc[p] == aSrc[p + 1] &&
 					aSrc[p] == aSrc[p + 2] &&
-					aSrc[p] == aSrc[p + 3] &&
-					aSrc[p] == aSrc[p + 4]) &&
+					aSrc[p] == aSrc[p + 3]) &&
 				!(aSrc[p] == aPrev[p] &&
 					aSrc[p + 1] == aPrev[p + 1] &&
-					aSrc[p + 2] == aPrev[p + 2] &&
-					aSrc[p + 3] == aPrev[p + 3])) 
+					aSrc[p + 2] == aPrev[p + 2])) 
 				p++;
 
 			l = p - inp;
@@ -200,15 +193,10 @@ int encodeDelta16Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* a
 		if (skip > 255) skip = 255;
 		aOut[ofs++] = skip;
 		inp += skip;
-		// can we run; interrupt run if we can skip at least 4 bytes
+		// can we run?
 		int l = 0;
 		while ((inp + l < width) &&
-			aSrc[inp + l] == aSrc[inp] &&
-			!(inp + l + 3 < width &&
-				aSrc[inp + l] == aPrev[inp + l] &&
-				aSrc[inp + l + 1] == aPrev[inp + l + 1] &&
-				aSrc[inp + l + 2] == aPrev[inp + l + 2] &&
-				aSrc[inp + l + 3] == aPrev[inp + l + 3]))
+			aSrc[inp + l] == aSrc[inp])
 			l++;
 
 		if (l > 3)
@@ -226,16 +214,20 @@ int encodeDelta16Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* a
 			// find out how much we need to copy
 			int p = inp;
 			l = 0;
-			// interrupt copy if a run or skip of at least 4 bytes is found
-			while ((p + 4) < width &&
+			// interrupt copy if a run or skip of at least 6 bytes is found
+			while ((p + 6) < width &&
 				!(aSrc[p] == aSrc[p + 1] &&
 					aSrc[p] == aSrc[p + 2] &&
 					aSrc[p] == aSrc[p + 3] &&
-					aSrc[p] == aSrc[p + 4]) &&
+					aSrc[p] == aSrc[p + 4] &&
+					aSrc[p] == aSrc[p + 5] &&
+					aSrc[p] == aSrc[p + 6]) &&
 				!(aSrc[p] == aPrev[p] &&
 					aSrc[p + 1] == aPrev[p + 1] &&
 					aSrc[p + 2] == aPrev[p + 2] &&
-					aSrc[p + 3] == aPrev[p + 3]))
+					aSrc[p + 3] == aPrev[p + 3] &&
+					aSrc[p + 4] == aPrev[p + 4] &&
+					aSrc[p + 5] == aPrev[p + 5]))
 				p++;
 
 			l = p - inp;
