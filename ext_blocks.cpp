@@ -155,7 +155,7 @@ int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 			if (aFrame[ofs + bestlen] == aPrev[i + bestlen])
 			{
 				int l = 0;
-				while (aFrame[ofs + l] == aPrev[i + l] && (ofs + l) < pixels && l < 10)
+				while (l < 10 && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
 				{
 					l++;
 				}
@@ -187,7 +187,7 @@ int bestLZRun1(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 			if (aFrame[ofs + bestlen] == aPrev[i + bestlen])
 			{
 				int l = 0;
-				while (aFrame[ofs + l] == aPrev[i + l] && (ofs + l) < pixels && l < 255)
+				while (l < 255 && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
 				{
 					l++;
 				}
@@ -336,10 +336,10 @@ int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 	for (int i = start; i < end; i++)
 	{
 		{
-			if (aFrame[ofs + bestlen] == aPrev[i + bestlen])
+			if (i + bestlen < end && aFrame[ofs + bestlen] == aPrev[i + bestlen])
 			{
 				int l = 0;
-				while (aFrame[ofs + l] == aPrev[i + l] && (ofs + l) < pixels && l < 255)
+				while (l < 255 && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
 				{
 					l++;
 				}

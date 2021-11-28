@@ -29,7 +29,6 @@ int encodeRLELine(unsigned char* aOut, unsigned char* aSrc, int width)
 		{
 			// find out how much we need to copy
 			int p = inp;
-			l = 0;
 			// stop copy when we find a run of 4 bytes
 			while ((p + 3) < width &&
 				!(aSrc[p] == aSrc[p + 1] &&
@@ -102,7 +101,6 @@ int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aP
 		{
 			// find out how much we need to copy
 			int p = inp;
-			l = 0;
 			// interrupt copy if a run or skip of at least 3 bytes is found
 			while ((p + 3) < width &&
 				!(aSrc[p] == aSrc[p + 1] &&
@@ -210,7 +208,6 @@ int encodeDelta16Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* a
 		{
 			// find out how much we need to copy
 			int p = inp;
-			l = 0;
 			// interrupt copy if a run or skip of at least 6 bytes is found
 			while ((p + 6) < width &&
 				!(aSrc[p] == aSrc[p + 1] &&
