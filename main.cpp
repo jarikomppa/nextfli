@@ -695,7 +695,7 @@ void writechunk(FILE* outfile, Frame* frame, int tag, int frameno)
 		fwrite(frame->mFrameData, 1, frame->mFrameDataSize, outfile);
 }
 
-void output(FliHeader& header, FILE* outfile)
+void output_flc(FliHeader& header, FILE* outfile)
 {
 	printf("Writing file..\n");
 	auto start = std::chrono::steady_clock::now();
@@ -771,6 +771,114 @@ void output(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
+
+void output_flx(FliHeader& header, FILE* outfile)
+{
+	printf("Writing file..\n");
+	auto start = std::chrono::steady_clock::now();
+
+#pragma pack(push, 1)
+	struct flxheader
+	{
+		unsigned int tag;
+		unsigned short frames;
+		unsigned short speed;
+		unsigned char pal[2 * 256];
+	} hdr;
+#pragma pack(pop)
+	memset(&hdr, 0, sizeof(hdr));
+	hdr.tag = 'LFXN'; // reverses to 'NXFL'
+	hdr.tag = header.mFrames;
+	hdr.speed = header.mSpeed;
+	for (int i = 0; i < 256; i++)
+	{
+		int c;
+		c = ((gRoot->mPalette[i] >> 16) & 0xe0) << 1;
+		c |= ((gRoot->mPalette[i] >> 8) & 0xe0) >> 2;
+		c |= ((gRoot->mPalette[0] >> 0) & 0xe0) >> 5;
+
+		hdr.pal[i * 2 + 0] = c >> 1;
+		hdr.pal[i * 2 + 1] = c & 1;
+	}
+
+	fwrite(&hdr, 1, sizeof(hdr), outfile);
+	Frame* walker = gRoot;
+	int framecounts[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+	int framemaxsize[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+	int frameminsize[16] = { 0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff };
+	int total = 0;
+	int frames = 0;
+	while (walker)
+	{
+		if (frames == 0)
+			header.mOframe1 = ftell(outfile); // start of first frame
+		if (frames == 1)
+			header.mOframe2 = ftell(outfile); // start of second frame
+
+		int chunktype = 0;
+		switch (walker->mFrameType)
+		{
+		case SAMEFRAME:chunktype = 0;  printf("s"); break;
+		case BLACKFRAME:chunktype = 13;  printf("b"); break;
+		case RLEFRAME:chunktype = 15; printf("r"); break;
+		case DELTA8FRAME: chunktype = 12; printf("d"); break;
+		case DELTA16FRAME: chunktype = 7;  printf("D"); break;
+		case FLI_COPY: chunktype = 16; printf("c"); break;
+			// extended blocks:
+		case ONECOLOR: chunktype = 101;  printf("o"); break;
+		case LINEARRLE8: chunktype = 102; printf("l"); break;
+		case LINEARRLE16: chunktype = 103; printf("L"); break;
+		case LINEARDELTA8: chunktype = 104; printf("e"); break;
+		case LINEARDELTA16: chunktype = 105; printf("E"); break;
+		case LZ1: chunktype = 106; printf("1"); break;
+		case LZ2: chunktype = 107; printf("2"); break;
+		case LZ3: chunktype = 108; printf("3"); break;
+		default: printf("?!?\n");
+		}		
+		fputc(walker->mFrameType, outfile);
+		unsigned short ds = walker->mFrameDataSize;
+		fwrite(&ds, 1, 2, outfile);
+		if (ds)
+		{
+			fwrite(walker->mFrameData, 1, walker->mFrameDataSize, outfile);
+		}
+		
+		if (walker->mFrameDataSize > framemaxsize[walker->mFrameType]) framemaxsize[walker->mFrameType] = walker->mFrameDataSize;
+		if (walker->mFrameDataSize < frameminsize[walker->mFrameType]) frameminsize[walker->mFrameType] = walker->mFrameDataSize;
+		framecounts[walker->mFrameType]++;
+		total += walker->mFrameDataSize;
+		walker = walker->mNext;
+		frames++;
+	}
+	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total / 1024, total / (1024 * 1024), ftell(outfile) - total);
+	printf("Compression ratio %3.3f%%, %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), total / frames);
+	printf("\nBlock types:\n");
+	if (framecounts[1]) printf("s sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
+	if (framecounts[2]) printf("b blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);
+	if (framecounts[3]) printf("r rleframe      %5d (%5d -%5d bytes)\n", framecounts[3], frameminsize[3], framemaxsize[3]);
+	if (framecounts[4]) printf("d delta8frame   %5d (%5d -%5d bytes)\n", framecounts[4], frameminsize[4], framemaxsize[4]);
+	if (framecounts[5]) printf("D delta16frame  %5d (%5d -%5d bytes)\n", framecounts[5], frameminsize[5], framemaxsize[5]);
+	if (framecounts[6]) printf("c copy          %5d (%5d -%5d bytes)\n", framecounts[6], frameminsize[6], framemaxsize[6]);
+	printf("-- extended blocks --\n");
+	if (framecounts[7]) printf("o onecolor      %5d (%5d -%5d bytes)\n", framecounts[7], frameminsize[7], framemaxsize[7]);
+	if (framecounts[8]) printf("l linearrle8    %5d (%5d -%5d bytes)\n", framecounts[8], frameminsize[8], framemaxsize[8]);
+	if (framecounts[9]) printf("L linearrle16   %5d (%5d -%5d bytes)\n", framecounts[9], frameminsize[9], framemaxsize[9]);
+	if (framecounts[10]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
+	if (framecounts[11]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
+	if (framecounts[12]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
+	if (framecounts[13]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+	if (framecounts[14]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[14], frameminsize[14], framemaxsize[14]);
+
+	header.mSize = ftell(outfile);
+	header.mFrames = frames;
+
+	fseek(outfile, 0, SEEK_SET);
+	fwrite(&header, 1, sizeof(FliHeader), outfile); // finished header
+
+	auto end = std::chrono::steady_clock::now();
+	std::chrono::duration<double> elapsed_seconds = end - start;
+	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
+}
 int main(int argc, char* argv[])
 {
 	FILE* outfile;
@@ -787,7 +895,8 @@ int main(int argc, char* argv[])
 	encode(header);
 
 	outfile = fopen("output.flc", "wb");
-	output(header, outfile);
+	output_flc(header, outfile);
+	//output_flx(header, outfile);
 	fclose(outfile);
 	
 	auto end = std::chrono::steady_clock::now();
