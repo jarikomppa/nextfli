@@ -413,11 +413,11 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 		readbytes = decode_rleframe(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
 		break;	
 	case DELTA8FRAME:
-		memcpy(buf, aFrame->mIndexPixels, aWidth * aHeight);
+		memcpy(buf, aPrev->mIndexPixels, aWidth * aHeight);
 		readbytes = decode_delta8frame(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
 		break;				
 	case DELTA16FRAME:
-		memcpy(buf, aFrame->mIndexPixels, aWidth * aHeight);
+		memcpy(buf, aPrev->mIndexPixels, aWidth * aHeight);
 		readbytes = decode_delta16frame(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
 		break;		
 	case LINEARRLE8:

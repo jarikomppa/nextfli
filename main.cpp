@@ -32,6 +32,7 @@ int gPointSample = 0;
 int gDither = 1;
 int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
+int gUseDelta8Frame = 1;
 int gSlowBlocks = 1;
 
 class AddFrameTask : public Thread::PoolTask
@@ -355,8 +356,7 @@ public:
 	virtual void work()
 	{
 		int pixels = mHeader.mWidth * mHeader.mHeight;
-		
-		/*
+
 		int allzero = 1;
 		for (int i = 0; allzero && i < pixels; i++)
 			allzero = (mFrame->mIndexPixels[i] == 0);
@@ -384,7 +384,7 @@ public:
 				return;
 			}
 		}
-		*/
+		
 		if (gExtendedBlocks)
 		{
 			int allsingle = 1;
@@ -413,7 +413,7 @@ public:
 			memcpy(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 			mFrame->mFrameType = FLI_COPY;
 			verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-			
+
 			data = new unsigned char[pixels * 2];
 			len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 			if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
@@ -560,24 +560,27 @@ public:
 			}
 		
 			if (gClassicBlocks)
-			{				
-				data = new unsigned char[pixels * 2];
-				len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-				if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
+			{
+				if (gUseDelta8Frame)
+				{
+					data = new unsigned char[pixels * 2];
+					len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+					if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
 
-				if (len < mFrame->mFrameDataSize)
-				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = DELTA8FRAME;
-					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					if (len < mFrame->mFrameDataSize)
+					{
+						delete[] mFrame->mFrameData;
+						mFrame->mFrameData = data;
+						mFrame->mFrameDataSize = len;
+						mFrame->mFrameType = DELTA8FRAME;
+						verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					}
+					else
+					{
+						delete[] data;
+					}
 				}
-				else
-				{
-					delete[] data;
-				}
-				
+
 				data = new unsigned char[pixels * 2];
 				len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 				if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
@@ -594,8 +597,8 @@ public:
 				{
 					delete[] data;
 				}
+
 			}
-			
 		}
 
 		// TODO: start frame from solid fill - pretty much same as linear-rle..
@@ -684,7 +687,6 @@ void writechunk(FILE* outfile, Frame* frame, int tag, int frameno)
 		{
 			fwrite(&frame->mPalette[i], 1, 3, outfile); // TODO: verify this is r,g,b
 		}
-		printf(".. %d\n", ftell(outfile));
 	}
 	chdr.size = sizeof(chdr) + frame->mFrameDataSize;
 	chdr.tag = tag;
@@ -698,7 +700,6 @@ void output(FliHeader& header, FILE* outfile)
 	printf("Writing file..\n");
 	auto start = std::chrono::steady_clock::now();
 	fwrite(&header, 1, sizeof(FliHeader), outfile); // unfinished header
-	printf("header size %d\n", ftell(outfile));
 	Frame* walker = gRoot;
 	int framecounts[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 	int framemaxsize[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
@@ -718,7 +719,7 @@ void output(FliHeader& header, FILE* outfile)
 		case SAMEFRAME:chunktype = 0;  printf("s"); break;
 		case BLACKFRAME:chunktype = 13;  printf("b"); break;
 		case RLEFRAME:chunktype = 15; printf("r"); break;
-		case DELTA8FRAME: chunktype = 12;  chunktype = printf("d"); break;
+		case DELTA8FRAME: chunktype = 12; printf("d"); break;
 		case DELTA16FRAME: chunktype = 7;  printf("D"); break;
 		case FLI_COPY: chunktype = 16; printf("c"); break;
 			// extended blocks:

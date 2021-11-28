@@ -79,7 +79,7 @@ int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aP
 		// can we skip?
 		int skip = 0;
 		while ((inp + skip < width) && aSrc[inp + skip] == aPrev[inp + skip]) skip++;
-		if (inp + skip > width)
+		if (inp + skip >= width)
 			break;
 		if (skip > 255) skip = 255;
 		aOut[ofs++] = skip;
@@ -93,7 +93,7 @@ int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aP
 		if (l > 2)
 		{
 			// encode run
-			if (l > 128) l = 128;
+			if (l > 128) l = 128;			
 			aOut[ofs++] = -l;			
 			aOut[ofs++] = aSrc[inp];
 			inp += l;
@@ -135,32 +135,38 @@ int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aP
 int encodeDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int width, int height)
 {
 	int ofs = 0;
-	int row = 0;
+	int startrow = 0;
 	int match = 1;
-	while (match && row < height)
+	while (match && startrow < height)
 	{
 		for (int i = 0; match && i < width; i++)
-			match = (aFrame[row * width + i] == aPrev[row * width + i]);
+			match = (aFrame[startrow * width + i] == aPrev[startrow * width + i]);
 		if (match)
-			row++;
+			startrow++;
 	}
-	data[ofs] = row & 0xff;
-	ofs++;
-	data[ofs] = (row >> 8) & 0xff;
-	ofs++;
+	match = 1;
+	int rows = height - startrow;
 
-	data[ofs] = (height - row) & 0xff;
-	ofs++;
-	data[ofs] = ((height - row) >> 8) & 0xff;
-	ofs++;
+	while (match && rows)
+	{
+		for (int i = 0; match && i < width; i++)
+			match = (aFrame[(rows + startrow - 1) * width + i] == aPrev[(rows + startrow - 1) * width + i]);
+		if (match)
+			rows--;
+	}
 
-	while (row < height)
+	data[ofs++] = startrow & 0xff;
+	data[ofs++] = (startrow >> 8) & 0xff;
+
+	data[ofs++] = (rows) & 0xff;
+	data[ofs++] = (rows >> 8) & 0xff;
+
+	for (int i = 0; i < rows; i++)
 	{
 		match = 1;
 		int skip = 0;
-		int w = encodeDelta8Line(data + ofs, aFrame + row * width, aPrev + row * width, width);
+		int w = encodeDelta8Line(data + ofs, aFrame + (i + startrow) * width, aPrev + (i + startrow) * width, width);
 		ofs += w;
-		row++;
 	}
 
 	return ofs;
