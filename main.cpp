@@ -30,7 +30,7 @@ Frame* gRoot = NULL, * gLast = NULL;
 int gHalfRes = 0;
 int gPointSample = 0;
 int gDither = 1;
-int gExtendedBlocks = 1;
+int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
 int gSlowBlocks = 1;
 
@@ -341,8 +341,6 @@ void quantize(const FliHeader& header)
 	printf("Time elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-
-
 class EncodeTask : public Thread::PoolTask
 {
 public:
@@ -358,12 +356,15 @@ public:
 	{
 		int pixels = mHeader.mWidth * mHeader.mHeight;
 		
+		/*
 		int allzero = 1;
 		for (int i = 0; allzero && i < pixels; i++)
 			allzero = (mFrame->mIndexPixels[i] == 0);
 		if (allzero)
 		{
 			mFrame->mFrameType = BLACKFRAME;
+			mFrame->mFrameData = 0;
+			mFrame->mFrameDataSize = 0;
 			verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 			return;
 		}
@@ -377,11 +378,13 @@ public:
 			if (identical)
 			{
 				mFrame->mFrameType = SAMEFRAME;
+				mFrame->mFrameData = 0;
+				mFrame->mFrameDataSize = 0;
 				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
 		}
-
+		*/
 		if (gExtendedBlocks)
 		{
 			int allsingle = 1;
@@ -406,10 +409,26 @@ public:
 		if (gClassicBlocks)
 		{
 			mFrame->mFrameData = new unsigned char[pixels * 2];
-			mFrame->mFrameDataSize = encodeRLEFrame(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-			if (mFrame->mFrameDataSize > pixels) printf("overlong rle: %d +%d\n", mFrame->mFrameDataSize, mFrame->mFrameDataSize - pixels);
-			mFrame->mFrameType = RLEFRAME;
+			mFrame->mFrameDataSize = mHeader.mWidth * mHeader.mHeight;
+			memcpy(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+			mFrame->mFrameType = FLI_COPY;
 			verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+			
+			data = new unsigned char[pixels * 2];
+			len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+			if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
+			if (len < mFrame->mFrameDataSize)
+			{
+				delete[] mFrame->mFrameData;
+				mFrame->mFrameData = data;
+				mFrame->mFrameDataSize = len;
+				mFrame->mFrameType = RLEFRAME;
+				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+			}
+			else
+			{
+				delete[] data;
+			}			
 		}
 
 		if (gExtendedBlocks)
@@ -541,7 +560,7 @@ public:
 			}
 		
 			if (gClassicBlocks)
-			{
+			{				
 				data = new unsigned char[pixels * 2];
 				len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 				if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
@@ -558,7 +577,7 @@ public:
 				{
 					delete[] data;
 				}
-
+				
 				data = new unsigned char[pixels * 2];
 				len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 				if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
@@ -619,16 +638,67 @@ void encode(const FliHeader& header)
 
 }
 
+void writechunk(FILE* outfile, Frame* frame, int tag, int frameno)
+{
+#pragma pack(push, 1)
+
+	struct framehdr
+	{
+		unsigned int size;
+		unsigned short tag;
+		unsigned short chunks;
+		unsigned short reserved[4];
+	} hdr;	
+
+	struct chunkhdr
+	{
+		unsigned int size;
+		unsigned short tag;
+	} chdr;
+#pragma pack(pop)
+
+	memset(&hdr, 0, sizeof(hdr));
+	hdr.size = sizeof(hdr) + sizeof(chdr) + frame->mFrameDataSize;
+	if (frameno == 0)
+		hdr.size += sizeof(chdr) + 2 + 1 + 1 + 3 * 256;
+	hdr.tag = 0xF1FA;
+	hdr.chunks = 1 + (frameno == 0 ? 1 : 0);
+	if (frame->mFrameType == SAMEFRAME)
+	{
+		hdr.chunks = 0;
+		hdr.size = sizeof(hdr);
+	}
+	fwrite(&hdr, 1, sizeof(hdr), outfile);
+
+	if (frameno == 0)
+	{
+		// output palette chunk
+		chdr.size = sizeof(chdr) + 2 + 1 + 1 + 3 * 256;
+		chdr.tag = 4; // 256 level palette
+		fwrite(&chdr, 1, sizeof(chdr), outfile);
+		fputc(1, outfile); // one packet
+		fputc(0, outfile); // ^16bit value
+		fputc(0, outfile); // skip 0
+		fputc(0, outfile); // copy 256
+		for (int i = 0; i < 256; i++)
+		{
+			fwrite(&frame->mPalette[i], 1, 3, outfile); // TODO: verify this is r,g,b
+		}
+		printf(".. %d\n", ftell(outfile));
+	}
+	chdr.size = sizeof(chdr) + frame->mFrameDataSize;
+	chdr.tag = tag;
+	fwrite(&chdr, 1, sizeof(chdr), outfile);
+	if (frame->mFrameDataSize)
+		fwrite(frame->mFrameData, 1, frame->mFrameDataSize, outfile);
+}
+
 void output(FliHeader& header, FILE* outfile)
 {
 	printf("Writing file..\n");
 	auto start = std::chrono::steady_clock::now();
 	fwrite(&header, 1, sizeof(FliHeader), outfile); // unfinished header
-
-	// TODO header.mOframe1 = ftell(outfile); // start of first frame
-	// TODO header.mOframe1 = ftell(outfile); // start of second frame
-
-	// TODO: write out whole flc
+	printf("header size %d\n", ftell(outfile));
 	Frame* walker = gRoot;
 	int framecounts[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 	int framemaxsize[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
@@ -637,23 +707,32 @@ void output(FliHeader& header, FILE* outfile)
 	int frames = 0;
 	while (walker)
 	{
+		if (frames == 0)
+			header.mOframe1 = ftell(outfile); // start of first frame
+		if (frames == 1)
+			header.mOframe2 = ftell(outfile); // start of second frame
+
+		int chunktype = 0;
 		switch (walker->mFrameType)
 		{
-		case SAMEFRAME:printf("s"); break;
-		case BLACKFRAME:printf("b"); break;
-		case RLEFRAME:printf("r"); break;
-		case DELTA8FRAME:printf("d"); break;
-		case DELTA16FRAME:printf("D"); break;
-		case ONECOLOR:printf("o"); break;
-		case LINEARRLE8:printf("l"); break;
-		case LINEARRLE16:printf("L"); break;
-		case LINEARDELTA8:printf("e"); break;
-		case LINEARDELTA16:printf("E"); break;
-		case LZ1:printf("1"); break;
-		case LZ2:printf("2"); break;
-		case LZ3:printf("3"); break;
+		case SAMEFRAME:chunktype = 0;  printf("s"); break;
+		case BLACKFRAME:chunktype = 13;  printf("b"); break;
+		case RLEFRAME:chunktype = 15; printf("r"); break;
+		case DELTA8FRAME: chunktype = 12;  chunktype = printf("d"); break;
+		case DELTA16FRAME: chunktype = 7;  printf("D"); break;
+		case FLI_COPY: chunktype = 16; printf("c"); break;
+			// extended blocks:
+		case ONECOLOR: chunktype = 101;  printf("o"); break;
+		case LINEARRLE8: chunktype = 102; printf("l"); break;
+		case LINEARRLE16: chunktype = 103; printf("L"); break;
+		case LINEARDELTA8: chunktype = 104; printf("e"); break;
+		case LINEARDELTA16: chunktype = 105; printf("E"); break;
+		case LZ1: chunktype = 106; printf("1"); break;
+		case LZ2: chunktype = 107; printf("2"); break;
+		case LZ3: chunktype = 108; printf("3"); break;
 		default: printf("?!?\n");
 		}
+		writechunk(outfile, walker, chunktype, frames);
 		if (walker->mFrameDataSize > framemaxsize[walker->mFrameType]) framemaxsize[walker->mFrameType] = walker->mFrameDataSize;
 		if (walker->mFrameDataSize < frameminsize[walker->mFrameType]) frameminsize[walker->mFrameType] = walker->mFrameDataSize;
 		framecounts[walker->mFrameType]++;
@@ -661,25 +740,27 @@ void output(FliHeader& header, FILE* outfile)
 		walker = walker->mNext;
 		frames++;
 	}
-	printf("\nTotal %d bytes (%d kB, %d MB)\n", total, total/1024, total/(1024*1024));
-	printf("Compression ratio %3.3f%%\n", 100 * total / (float)(frames * header.mWidth * header.mWidth));
+	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total/1024, total/(1024*1024), ftell(outfile)-total);
+	printf("Compression ratio %3.3f%%, %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), total / frames);
 	printf("\nBlock types:\n");
 	if (framecounts[1]) printf("s sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
 	if (framecounts[2]) printf("b blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);
 	if (framecounts[3]) printf("r rleframe      %5d (%5d -%5d bytes)\n", framecounts[3], frameminsize[3], framemaxsize[3]);
 	if (framecounts[4]) printf("d delta8frame   %5d (%5d -%5d bytes)\n", framecounts[4], frameminsize[4], framemaxsize[4]);
 	if (framecounts[5]) printf("D delta16frame  %5d (%5d -%5d bytes)\n", framecounts[5], frameminsize[5], framemaxsize[5]);
+	if (framecounts[6]) printf("c copy          %5d (%5d -%5d bytes)\n", framecounts[6], frameminsize[6], framemaxsize[6]);
 	printf("-- extended blocks --\n");
-	if (framecounts[6]) printf("o onecolor      %5d (%5d -%5d bytes)\n", framecounts[6], frameminsize[6], framemaxsize[6]);
-	if (framecounts[7]) printf("l linearrle8    %5d (%5d -%5d bytes)\n", framecounts[7], frameminsize[7], framemaxsize[7]);
-	if (framecounts[8]) printf("L linearrle16   %5d (%5d -%5d bytes)\n", framecounts[8], frameminsize[8], framemaxsize[8]);
-	if (framecounts[9]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[9], frameminsize[9], framemaxsize[9]);
-	if (framecounts[10]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
-	if (framecounts[11]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
-	if (framecounts[12]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
-	if (framecounts[13]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+	if (framecounts[7]) printf("o onecolor      %5d (%5d -%5d bytes)\n", framecounts[7], frameminsize[7], framemaxsize[7]);
+	if (framecounts[8]) printf("l linearrle8    %5d (%5d -%5d bytes)\n", framecounts[8], frameminsize[8], framemaxsize[8]);
+	if (framecounts[9]) printf("L linearrle16   %5d (%5d -%5d bytes)\n", framecounts[9], frameminsize[9], framemaxsize[9]);
+	if (framecounts[10]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
+	if (framecounts[11]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
+	if (framecounts[12]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
+	if (framecounts[13]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+	if (framecounts[14]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[14], frameminsize[14], framemaxsize[14]);
 
 	header.mSize = ftell(outfile);
+	header.mFrames = frames;
 
 	fseek(outfile, 0, SEEK_SET);
 	fwrite(&header, 1, sizeof(FliHeader), outfile); // finished header

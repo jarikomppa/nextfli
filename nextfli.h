@@ -5,18 +5,20 @@ enum FRAMETYPE
 	RLEFRAME = 3,
 	DELTA8FRAME = 4,
 	DELTA16FRAME = 5,
+	FLI_COPY = 6,
 	// extended blocks
-	ONECOLOR = 6,
-	LINEARRLE8 = 7,
-	LINEARRLE16 = 8,
-	LINEARDELTA8 = 9,
-	LINEARDELTA16 = 10,
-	LZ1 = 11,
-	LZ2 = 12,
-	LZ3 = 13
+	ONECOLOR = 7,
+	LINEARRLE8 = 8,
+	LINEARRLE16 = 9,
+	LINEARDELTA8 = 10,
+	LINEARDELTA16 = 11,
+	LZ1 = 12,
+	LZ2 = 13,
+	LZ3 = 14
 }; 
 
 // FLI header
+#pragma pack(push, 1)
 struct FliHeader
 {
 	int       mSize; // Should be same as file size.
@@ -26,7 +28,7 @@ struct FliHeader
 	short int mHeight;// y size
 	short int mDepth; // bits per pixel, always 8 in fli/flc
 	short int mFlags; // Bitmapped flags. 0=ring frame, 1=header updated
-	short int mSpeed; // Delay between frames in ms (or retraces :))
+    int       mSpeed; // Delay between frames in ms (or retraces :))
 	short int mReserved1;
 	int       mCreated; // MS-dos date of creation
 	int       mCreator; // SerNo of animator, 0464c4942h for FlicLib
@@ -37,22 +39,22 @@ struct FliHeader
 	char      mReserved2[38];
 	int       mOframe1; // offset to frame 1 
 	int       mOframe2; // offset to frame 2 - for looping, jump here
-	char      mReserved3[42];
+	char      mReserved3[40];
 
 	FliHeader()
 	{
 		// Some more or less good defaults
 		mSize = 0;
-		mMagic = 0xAF12;
+		mMagic = 0xAF12; // "standard FLC"
 		mFrames = 0;
 		mWidth = 0;
 		mHeight = 0;
 		mDepth = 8;
 		mFlags = 3;
-		mSpeed = 80;
+		mSpeed = 80; // 1000/80ms = 12.5Hz, or 1/4 of 50hz
 		mReserved1 = 0;
 		mCreated = 0;
-		mCreator = 0x50181ee7;
+		mCreator = 0xdecafbad;
 		mUpdated = 0;
 		mUpdater = mCreator;
 		mAspectx = 4;
@@ -61,10 +63,11 @@ struct FliHeader
 		mOframe2 = 0;
 		for (int i = 0; i < 38; i++)
 			mReserved2[i] = 0;
-		for (int i = 0; i < 42; i++)
+		for (int i = 0; i < 40; i++)
 			mReserved3[i] = 0;
 	}
 };
+#pragma pack(pop)
 
 struct FliFrameHeader
 {

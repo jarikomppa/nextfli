@@ -63,8 +63,6 @@ int decode_delta8frame(unsigned char* buf, unsigned char* data, int datalen, int
 		unsigned char* it = buf + aWidth * y;
 		int x = 0;
 		int npackets = data[idx++];
-		int yskip = data[idx++];
-		y += yskip;
 		while (npackets-- && x < aWidth) 
 		{
 			int skip = data[idx++];
@@ -403,17 +401,21 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 	case BLACKFRAME:
 		memset(buf, 0, aWidth * aHeight);
 		break;
+	case FLI_COPY:
+		memcpy(buf, aFrame->mIndexPixels, aWidth * aHeight);
+		readbytes = aWidth * aHeight;
+		break;
 	case ONECOLOR:
 		memset(buf, aFrame->mFrameData[0], aWidth * aHeight);
 		readbytes = 1;
 		break;
 	case RLEFRAME:
 		readbytes = decode_rleframe(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
-		break;
+		break;	
 	case DELTA8FRAME:
 		memcpy(buf, aFrame->mIndexPixels, aWidth * aHeight);
 		readbytes = decode_delta8frame(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
-		break;		
+		break;				
 	case DELTA16FRAME:
 		memcpy(buf, aFrame->mIndexPixels, aWidth * aHeight);
 		readbytes = decode_delta16frame(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);

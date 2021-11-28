@@ -66,12 +66,11 @@ int encodeRLEFrame(unsigned char* aRLEframe, unsigned char* aIndexPixels, int wi
 	return ofs;
 }
 
-int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aPrev, int width, int skiplines)
+int encodeDelta8Line(unsigned char* aOut, unsigned char* aSrc, unsigned char* aPrev, int width)
 {
 	int packets = 0;
 	int ofs = 0;
 	aOut[ofs++] = 0; // number of packets
-	aOut[ofs++] = skiplines; // line skip count
 
 	// packet: skipcount, run/copy, pixeldata
 	int inp = 0;
@@ -159,17 +158,9 @@ int encodeDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char*
 	{
 		match = 1;
 		int skip = 0;
-		row++;
-		while (match && (row + skip) < height)
-		{
-			for (int i = 0; match && i < width; i++)
-				match = (aFrame[(row + skip) * width + i] == aPrev[(row + skip) * width + i]);
-			if (match)
-				skip++;
-		}
-		int w = encodeDelta8Line(data + ofs, aFrame + (row - 1) * width, aPrev + (row - 1) * width, width, skip);
+		int w = encodeDelta8Line(data + ofs, aFrame + row * width, aPrev + row * width, width);
 		ofs += w;
-		row += skip;
+		row++;
 	}
 
 	return ofs;
