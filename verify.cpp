@@ -4,32 +4,31 @@
 
 int decode_rleframe(unsigned char *buf, unsigned char *data, int datalen, int aWidth, int aHeight)
 {
-	int idx = 0;
+	int idx = 0;	
 	for (int y = 0; y < aHeight; ++y) 
 	{
-		unsigned char* it = buf + aWidth * y;
+		int out = aWidth * y;
 		int x = 0;
-		int npackets = data[idx++];
-		while (idx < datalen && npackets-- != 0 && x < aWidth) 
+		int packets = data[idx++];
+		while (idx < datalen && packets-- != 0 && x < aWidth) 
 		{
 			int count = (signed char)(data[idx++]);
 			if (count >= 0) 
 			{
 				unsigned char color = data[idx++];
-				while (count-- != 0 && x < aWidth) 
+				for (int i = 0; i < count && x < aWidth; i++)
 				{
-					*it = color;
-					++it;
-					++x;
+					buf[out++] = color;
+					x++;
 				}
 			}
 			else 
 			{
-				while (count++ != 0 && x < aWidth) 
+				count = -count;
+				for (int i = 0; i < count && x < aWidth; i++)
 				{
-					*it = data[idx++];
-					++it;
-					++x;
+					buf[out++] = data[idx++];
+					x++;
 				}
 			}
 		}
@@ -48,49 +47,52 @@ int read16(unsigned char* data, int& idx)
 int decode_delta8frame(unsigned char* buf, unsigned char* data, int datalen, int aWidth, int aHeight)
 {
 	int idx = 0;
-	int skipLines = read16(data, idx);
-	int nlines = read16(data, idx);
+	int out = 0;
+	int startrow = read16(data, idx);
+	int rows = read16(data, idx);
 
-	for (int y = skipLines; y < skipLines + nlines; ++y) 
+	for (int y = startrow; y < startrow + rows; ++y)
 	{
 		// Break in case of invalid data
 		if (y < 0 || y >= aHeight)
 		{
-			printf("invalid data\n");
+			printf("invalid data (%d)\n", __LINE__);
 			break;
 		}
 
-		unsigned char* it = buf + aWidth * y;
+		out = aWidth * y;
 		int x = 0;
-		int npackets = data[idx++];
-		while (npackets-- && x < aWidth) 
+		int packets = data[idx++];
+		while (packets-- && x < aWidth) 
 		{
 			int skip = data[idx++];
 
 			x += skip;
-			it += skip;
+			out += skip;
 
 			int count = (signed char)data[idx++];
-			if (count >= 0) 
+			if (count == 0)
 			{
-				unsigned char* end = buf + aWidth * aHeight;
-				while (count-- != 0 && it < end) 
+				// nop
+			}
+			else if (count > 0) 
+			{
+				while (count-- != 0 && out < aWidth * aHeight)
 				{
-					*it = data[idx++];
-					++it;
-					++x;
+					buf[out++] = data[idx++];
+					x++;
 				}
-				// Broken file? More bytes than available buffer
-				if (it == end)
+				if (out >= aWidth * aHeight)
 					return idx;
 			}
 			else 
 			{
-				unsigned char color = data[idx++];
-				while (count++ != 0 && x < aWidth) {
-					*it = color;
-					++it;
-					++x;
+				unsigned char c = data[idx++];
+				count = -count;
+				for (int i = 0; x < aWidth && i < count; i++)
+				{
+					buf[out++] = c;
+					x++;
 				}
 			}
 		}
@@ -101,110 +103,115 @@ int decode_delta8frame(unsigned char* buf, unsigned char* data, int datalen, int
 int decode_delta16frame(unsigned char* buf, unsigned char* data, int datalen, int aWidth, int aHeight)
 {
 	int idx = 0;
-	int nlines = read16(data, idx);
+	int out = 0;
+	int lines = read16(data, idx);
 	int y = 0;
-	while (nlines-- != 0) 
+	while (lines-- != 0) 
 	{
-		int npackets = 0;
+		// Packet count is part of the command word below
+		int packets = 0;
 
 		while (idx < datalen) 
 		{
 			signed short word = (signed short)read16(data, idx);
-			if (word < 0) 
-			{          // Has bit 15 (0x8000)
+			
+			if (word < 0)
+			{         
+				// skip lines or update last pixel
 				if (word & 0x4000) 
-				{      // Has bit 14 (0x4000)
-					y += -word;          // Skip lines
-				}
-				// Only last pixel has changed
+				{      
+					y += -word;
+				}				
 				else 
 				{
 					if (y < 0 || y >= aHeight)
 					{
-						printf("Decode error\n");
+						printf("Decode error (%d)\n", __LINE__);
 					}
-					if (y >= 0 && y < aHeight) 
+					if (y >= 0 && y < aHeight)
 					{
-						unsigned char* it = buf + y * aWidth + aWidth - 1;
-						*it = (word & 0xff);
+						// update last pixel (never used with our encoder)
+						buf[y * aWidth + aWidth - 1] = (word & 0xff);
+						printf("Update last pixel of line - shouldn't happen (%d)\n", __LINE__);
 					}
-					++y;
-					if (nlines-- == 0)
-						return idx;             // We are done
+					y++;
+					if (lines <= 0)
+						return idx;
+					lines--;
 				}
 			}
 			else 
 			{
-				npackets = word;
+				packets = word;
 				if (word > 256)
 				{
-					printf("Excessive packets\n");
+					printf("Excessive packets (%d)\n", __LINE__);
 				}
 				break;
 			}
 		}
 
-		// Avoid invalid data to skip more lines than what is available.
 		if (y >= aHeight)
 		{
-			printf("Encoding error\n");
+			printf("Encoding error (%d)\n", __LINE__);
 			break;
 		}
 
 		int x = 0;
-		while (npackets-- != 0) 
+		while (packets-- != 0) 
 		{
-			x += data[idx++];           // Skip pixels
-			signed char count = (signed char)data[idx++]; // Number of words
+			// Skip byte
+			x += data[idx++];
+			// Command word count
+			signed char count = (signed char)data[idx++]; 
 
 			if (y < 0 || y >= aHeight || x < 0 || x >= aWidth)
 			{
-				printf("Decode error\n");
+				printf("Decode error (%d)\n", __LINE__);
 			}
 			
-			unsigned char* it = buf + y * aWidth + x;
+			out = y * aWidth + x;
 
-			if (count >= 0) 
+			if (count == 0)
 			{
-				while (count-- != 0 && x < aWidth) 
+				// nop
+			}
+			else if (count > 0) 
+			{
+				for (int i = 0; x < aWidth && i < count; i++)
 				{
-					int color1 = data[idx++];
-					int color2 = data[idx++];
+					int a = data[idx++];
+					int b = data[idx++];
 
-					*it = color1;
-					++it;
-					++x;
+					buf[out++] = a;
+					x++;
 
 					if (x < aWidth) 
 					{
-						*it = color2;
-						++it;
-						++x;
+						buf[out++] = b;
+						x++;
 					}
 				}
 			}
 			else 
 			{
-				int color1 = data[idx++];
-				int color2 = data[idx++];
-
-				while (count++ != 0 && x < aWidth)
+				int a = data[idx++];
+				int b = data[idx++];
+				count = -count;
+				for (int i = 0; i != count && x < aWidth; i++)
 				{
-					*it = color1;
-					++it;
-					++x;
+					buf[out++] = a;
+					x++;
 
-					if (x < aWidth) 
+					if (x < aWidth)
 					{
-						*it = color2;
-						++it;
-						++x;
+						buf[out++] = b;
+						x++;
 					}
 				}
 			}
 		}
-
-		++y;
+		y++;
 	}
 	return idx;
 }
