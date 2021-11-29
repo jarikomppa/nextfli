@@ -14,22 +14,23 @@
 
 #include "nextfli.h"
 
+#include <iostream>
+#include "optionparser.h"
+
+#include <windows.h> // findfirst
 
 // ba
-int framestep = 1;
-int frames = 2037;
+//int frames = 2037;
 // cube
-//int framestep = 1;
 //int frames = 240;
 // ba_hvy
-//int framestep = 2;
-//int frames = 3671;
+int frames = 3671;
 
 
 Frame* gRoot = NULL, * gLast = NULL;
 int gHalfRes = 0;
 int gPointSample = 0;
-int gDither = 1;
+int gDither = 0;
 int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
 int gUseDelta8Frame = 1;
@@ -149,21 +150,41 @@ void addFrame(char* fn, const FliHeader& header, Thread::Pool &threadpool)
 	threadpool.addWork(t);
 }
 
-void loadframes(const FliHeader& header)
+void loadframes(FliHeader& header, const char *filemask)
 {
-	printf("Loading frames..\n");
+	printf("Loading frames using filemask \"%s\"\n", filemask);	
+
 	auto start = std::chrono::steady_clock::now();
 	Thread::Pool threadpool;
 	threadpool.init(24);
-	for (int i = 0; i < header.mFrames; i++)
+	WIN32_FIND_DATAA FindFileData;
+	HANDLE hFind;
+	hFind = FindFirstFileA(filemask, &FindFileData);
+	if (hFind != INVALID_HANDLE_VALUE)
 	{
-		char temp[100];
-		sprintf(temp, "ba/ba%04d.png", (i * framestep) + 1);
-		//sprintf(temp, "cube/256x192__%04d_cube%04d.png.png", (i * framestep), (i * framestep) + 1);
-		//sprintf(temp, "cube/cube%04d.png", (i * framestep) + 1);
-		//sprintf(temp, "ba_hvy/frame%04d.png", (i * framestep) + 1);
-		printf("Loading %s                    \r", temp);
-		addFrame(temp, header, threadpool);
+		do
+		{
+			char temp[512];
+			if (strrchr(filemask, '\\') != 0)
+			{
+				*(char*)(strrchr(filemask, '\\')+1) = 0;
+				sprintf(temp, "%s%s", filemask, FindFileData.cFileName);
+			}
+			else
+			if (strrchr(filemask, '/') != 0)
+			{
+				*(char*)(strrchr(filemask, '/')+1) = 0;
+				sprintf(temp, "%s%s", filemask, FindFileData.cFileName);
+			}
+			else
+				sprintf(temp, "%s", FindFileData.cFileName);
+			printf("Loading %s                    \r", temp);
+			addFrame(temp, header, threadpool);
+			header.mFrames++;
+		} 
+		while (FindNextFileA(hFind, &FindFileData));
+		
+		FindClose(hFind);
 	}
 	printf("\nWaiting for threads..\n");
 	threadpool.waitUntilDone();
@@ -879,26 +900,97 @@ void output_flx(FliHeader& header, FILE* outfile)
 	std::chrono::duration<double> elapsed_seconds = end - start;
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
-int main(int argc, char* argv[])
+
+enum optionIndex { UNKNOWN, HELP, FLC, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE };
+const option::Descriptor usage[] =
 {
+	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
+	{ HELP,			0, "h", "help", option::Arg::None,			 " -h --help\t Print usage and exit"},
+	{ FLC,			0, "f", "flc", option::Arg::None,			 " -f --flc\t Output standard FLC format (default: use flx)"},
+	{ STD,			0, "s", "std", option::Arg::None,			 " -s --std\t Use standard blocks (default: flc yes, flx no)"},
+	{ EXT,			0, "e", "ext", option::Arg::None,			 " -e --ext\t Use extended blocks (default: flc no, fli yes)"},
+	{ NOSLOW,		0, "n", "noslow", option::Arg::None,		 " -n --noslow\t Don't use slow-to-encode blocks (default: yes)"},
+	{ HALFRES,      0, "l", "halfres", option::Arg::None,        " -l --halfres\t Reduce output resolution to half x, half y (default: don't)"},
+	{ DITHER,       0, "d", "dither", option::Arg::None,         " -d --dither\t Use ordered dither (default: don't)"},
+	{ FASTSCALE,    0, "p", "fastscale", option::Arg::None,      " -p --fastscale\t Use fast image scaling (default: don't)"},
+	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f -d"},
+	{ 0,0,0,0,0,0 }
+};
+
+
+int main(int parc, char* pars[])
+{
+	option::Stats stats(usage, parc - 1, pars + 1);
+	assert(stats.buffer_max < 16 && stats.options_max < 16);
+	option::Option options[16], buffer[16];
+	option::Parser parse(true, usage, parc - 1, pars + 1, options, buffer);
+
+	if (options[UNKNOWN])
+	{
+		for (option::Option* opt = options[UNKNOWN]; opt; opt = opt->next())
+			printf("Unknown option: %s\n", opt->name);
+		printf("Run without parameters for help.\n");
+		return 0;
+	}
+
+	if (parse.error() || parc < 3 || options[HELP] || parse.nonOptionsCount() != 2)
+	{
+		option::printUsage(std::cout, usage);
+		return 0;
+	}
+
+	if (options[FLC])
+	{
+		gClassicBlocks = 1;
+		gExtendedBlocks = 0;
+	}
+	else
+	{
+		gClassicBlocks = 0;
+		gExtendedBlocks = 1;
+		gSlowBlocks = 1;
+	}
+
+	if (options[STD]) gClassicBlocks = 1;
+	if (options[EXT]) gExtendedBlocks = 1;
+	if (options[NOSLOW]) gSlowBlocks = 0;
+	if (options[HALFRES]) gHalfRes = 1;
+	if (options[DITHER]) gDither = 1;
+	if (options[FASTSCALE]) gPointSample = 1;
+
 	FILE* outfile;
 	FliHeader header;
 	auto start = std::chrono::steady_clock::now();
 
 	header.mWidth = 256;
 	header.mHeight = 192;
-	header.mFrames = frames / framestep;
+	header.mFrames = 0;
 
-
-	loadframes(header);
+	loadframes(header, parse.nonOption(1));
+	if (header.mFrames == 0)
+	{
+		printf("No frames loaded.\n");
+		return 0;
+	}
 	quantize(header);
 	encode(header);
-
-	outfile = fopen("output.flc", "wb");
-	output_flc(header, outfile);
-	//output_flx(header, outfile);
+	printf("Opening %s for writing..\n", parse.nonOption(0));
+	outfile = fopen(parse.nonOption(0), "wb");
+	if (!outfile)
+	{
+		printf("file open failed\n");
+		return 0;
+	}
+	if (options[FLC])
+	{
+		output_flc(header, outfile);
+	}
+	else
+	{
+		output_flx(header, outfile);
+	}
 	fclose(outfile);
-	
+
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;
 	printf("\nTotal time elapsed: %3.3fs\n", elapsed_seconds.count());
