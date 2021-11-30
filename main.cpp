@@ -7,6 +7,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
+
 #define SOL_QMEDIAN_IMPLEMENTATION
 #include "sol_qmedian.h"
 
@@ -99,33 +102,9 @@ public:
 		}
 		else
 		{
-			int cx = x / wd;
-			int cy = y / ht;
-			for (int i = 0; i < ht; i++)
-			{
-				for (int j = 0; j < wd; j++)
-				{					
-					int c = 0;
-					int r = 0, g = 0, b = 0;
-					for (int k = 0; k < cy; k++)
-					{
-						for (int l = 0; l < cx; l++, c++)
-						{
-							unsigned int p = data[(((i * y) / ht + k) * x + ((j * x) / wd + l))];
-							r += (p >> 16) & 0xff;
-							g += (p >> 8) & 0xff;
-							b += (p >> 0) & 0xff;
-						}
-					}
-
-					r /= c;
-					g /= c;
-					b /= c;
-
-					int p = (r << 16) | (g << 8) | (b << 0);
-					fr->mRgbPixels[(i + yofs) * header.mWidth + j + xofs] = p;
-				}
-			}
+			stbir_resize_uint8((const unsigned char*)data, x, y, x*4,
+				(unsigned char*)fr->mRgbPixels, wd, ht, wd*4,
+				4);
 		}
 		stbi_image_free((void*)data);
 	}
