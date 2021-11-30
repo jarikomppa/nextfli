@@ -1,4 +1,6 @@
 #include <Windows.h>
+#include <stdio.h>
+#include "threadpool.h"
 
 namespace Thread
 {
@@ -55,12 +57,6 @@ namespace Thread
 		}
 	}
 
-	struct thread_data
-	{
-		threadFunction mFunc;
-		void *mParam;
-	};
-
 	static DWORD WINAPI threadfunc(LPVOID d)
 	{
 		thread_data *p = (thread_data *)d;
@@ -101,45 +97,6 @@ namespace Thread
 	}
 
 	void poolWorker(void *aParam);
-
-	class PoolTask
-	{
-	public:
-		int mDeleteTask;
-		PoolTask() : mDeleteTask(0) {}
-		virtual void work() = 0;
-		virtual ~PoolTask() {}
-	};
-
-#define MAX_THREADPOOL_TASKS 1024
-
-	class Pool
-	{
-	public:
-		volatile int mRunning; // running flag, used to flag threads to stop (used by dtor)
-		int mThreadCount; // number of threads
-		ThreadHandle *mThread; // array of thread handles
-		void *mWorkMutex; // mutex to protect task array/maxtask
-		PoolTask *mTaskArray[MAX_THREADPOOL_TASKS]; // pointers to tasks
-		volatile int mMaxTask; // how many tasks are pending
-		volatile int mTasksRunning; // how many tasks are running
-		int mRobin; // cyclic counter, used to pick jobs for threads
-
-		// Initialize and run thread pool. For thread count 0, work is done at addWork call.
-		void init(int aThreadCount);
-		// Ctor, sets known state
-		Pool();
-		// Dtor. Waits for the threads to finish. Work may be unfinished.
-		~Pool();
-		// Add work to work list. Object is not automatically deleted when work is done.
-		void addWork(PoolTask *t);
-		// Call to wait until all tasks are done.
-		void waitUntilDone();
-		// Called from worker thread to get a new task. Returns null if no work available.
-		PoolTask *getWork();
-		// Called from worker thread to signal that one bit of work is done.
-		void doneWork();
-	};
 
 	void Pool::init(int aThreadCount)
 	{
@@ -235,9 +192,17 @@ namespace Thread
 		if (mWorkMutex) unlockMutex(mWorkMutex);
 	}
 
-	void Pool::waitUntilDone()
+	void Pool::waitUntilDone(int aSleep, bool aPrintout)
 	{
-		while (mMaxTask + mTasksRunning) { Thread::sleep(1); }
+		while (mMaxTask + mTasksRunning) 
+		{ 
+			Thread::sleep(aSleep);
+			if (aPrintout)
+			{
+				printf("\r%d tasks left     ", mMaxTask + mTasksRunning);
+			}
+		}
+		printf("\r                          \r");
 	}
 
 	void poolWorker(void *aParam)

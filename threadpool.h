@@ -68,7 +68,7 @@ namespace Thread
 		// Add work to work list. Object is not automatically deleted when work is done.
 		void addWork(PoolTask *t);
 		// Call to wait until all tasks are done.
-		void waitUntilDone();
+		void waitUntilDone(int aSleep = 1, bool aPrintout = false);
 		// Called from worker thread to get a new task. Returns null if no work available.
 		PoolTask *getWork();
 		// Called from worker thread to signal that one bit of work is done.
