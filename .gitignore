@@ -8,3 +8,5 @@ nextfli/Debug/
 nextfli/Release/
 nextfli/x64/
 ref/
+testplay/
+*.flx
