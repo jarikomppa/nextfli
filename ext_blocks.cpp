@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include "nextfli.h"
 
+int runlength(unsigned char* data, int max)
+{
+	int l = 1;
+	while (l < max && data[0] == data[l]) l++;
+	return l;
+}
+
 int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels)
 {
 	int ofs = 0;
@@ -8,10 +15,9 @@ int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels)
 	while (ofs < pixels)
 	{
 		// run
-		int l = 0;
-		while (l < 255 && ofs + l < pixels && src[ofs] == src[ofs + l]) l++;
+		int l = runlength(src + ofs, (ofs + 255) < pixels ? pixels - ofs : 255);
 		data[out++] = l; // value of 0 means run of 0 bytes 
-		data[out++] = src[ofs];
+		data[out++] = src[ofs]; // could skip this on 0, but that hardly ever happens
 		ofs += l;
 
 		if (ofs < pixels)
@@ -19,8 +25,7 @@ int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels)
 			// copy
 			// one run + copy segment costs at least 3 bytes, so skip until at least 3 byte run is found
 			l = 0;
-			while (l < 255 && ofs + l + 3 < pixels && 
-				!(src[ofs + l] == src[ofs + l + 1] && src[ofs + l] == src[ofs + l + 2] && src[ofs + l] == src[ofs + l + 3])) 
+			while (l < 255 && ofs + l + 3 < pixels && runlength(src + ofs + l, 3) < 3)
 				l++;
 
 			if (ofs + l + 3 >= pixels)
@@ -39,6 +44,13 @@ int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels)
 	return out;
 }
 
+int runlength16(unsigned short* data, int max)
+{
+	int l = 1;
+	while (l < max && data[0] == data[l]) l++;
+	return l;
+}
+
 int encodeLinearRLE16Frame(unsigned short* data, unsigned short* src, int pixels)
 {
 	pixels /= 2;
@@ -47,12 +59,9 @@ int encodeLinearRLE16Frame(unsigned short* data, unsigned short* src, int pixels
 	while (ofs < pixels)
 	{
 		// run
-		int l = 0;
-		while (l < 65536 && ofs + l < pixels && src[ofs] == src[ofs + l]) l++;
-		data[out] = l; // value of 0 means run of 65536 bytes 
-		out++;
-		data[out] = src[ofs];
-		out++;
+		int l = runlength16(src + ofs, (ofs + 65535) < pixels ? pixels - ofs : 65535);
+		data[out++] = l; // value of 0 means run 0
+		data[out++] = src[ofs];
 		ofs += l;
 
 		if (ofs < pixels)
@@ -60,20 +69,26 @@ int encodeLinearRLE16Frame(unsigned short* data, unsigned short* src, int pixels
 			// skip
 			// one run + skip segment costs at least 3 bytes, so skip until at least 3 byte run is found
 			l = 0;
-			while (l < 256 && ofs + l + 3 < pixels && !(src[ofs + l] == src[ofs + l + 1] && src[ofs + l] == src[ofs + l + 2] && src[ofs + l] == src[ofs + l + 3])) l++;
+			while (l < 65535 && ofs + l + 3 < pixels && runlength16(src + ofs + l, 3) < 3)
+				l++;
 			if (ofs + l + 3 >= pixels)
 				l = pixels - ofs;
-			data[out] = l;
-			out++;
+			data[out++] = l;
 			for (int i = 0; i < l; i++)
 			{
-				data[out] = src[ofs];
-				out++;
+				data[out++] = src[ofs];
 				ofs++;
 			}
 		}
 	}
 	return out * 2;
+}
+
+int skiplength(unsigned char* data, unsigned char* prev, int max)
+{
+	int l = 0;
+	while (l < max && data[l] == prev[l]) l++;
+	return l;
 }
 
 int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
@@ -82,33 +97,52 @@ int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned
 	int out = 0;
 	while (ofs < pixels)
 	{
-		// run
-		int l = 0;
-		while (l < 255 && ofs + l < pixels && aFrame[ofs + l] == aPrev[ofs + l]) l++;
+		// skip
+		int l = skiplength(aFrame + ofs, aPrev + ofs, ofs + 255 > pixels ? pixels - ofs : 255);
 		data[out] = l; // value of 0 means run of 0 bytes 
 		out++;
 		ofs += l;
 
 		if (ofs < pixels)
 		{
-			// copy
-			// one run + skip segment costs at least 2 bytes, so skip until at least 2 byte run is found
-			l = 0;
-			while (l < 255 && ofs + l + 2 < pixels && !(aFrame[ofs + l] == aPrev[ofs + l] && aFrame[ofs + l + 1] == aPrev[ofs + l + 1])) l++;
-			if (ofs + l + 2 >= pixels)
-				l = pixels - ofs;
-			data[out] = l;
-			out++;
-			for (int i = 0; i < l; i++)
+			// can we run?
+			l = runlength(aFrame + ofs, ofs + 255 > pixels ? pixels - ofs : 255);
+			if (l > 2)
 			{
-				data[out] = aFrame[ofs];
+				// run
+				data[out++] = -l;
+				data[out++] = aFrame[ofs];
+				ofs += l;
+			}
+			else
+			{
+				// copy
+				// one skip + copy segment costs at least 2 bytes, so skip until at least 2 byte run is found
+				l = 0;
+				while (l < 127 && ofs + l + 2 < pixels && skiplength(aFrame + ofs + l, aPrev + ofs + l, 2) < 2) l++;
+				if (ofs + l + 2 >= pixels)
+					l = pixels - ofs;
+				data[out] = l;
 				out++;
-				ofs++;
+				for (int i = 0; i < l; i++)
+				{
+					data[out] = aFrame[ofs];
+					out++;
+					ofs++;
+				}
 			}
 		}
 	}
 	return out;
 }
+
+int skiplength16(unsigned short* data, unsigned short* prev, int max)
+{
+	int l = 0;
+	while (l < max && data[l] == prev[l]) l++;
+	return l;
+}
+
 
 int encodeLinearDelta16Frame(unsigned short* data, unsigned short* aFrame, unsigned short* aPrev, int pixels)
 {
@@ -117,35 +151,45 @@ int encodeLinearDelta16Frame(unsigned short* data, unsigned short* aFrame, unsig
 	int out = 0;
 	while (ofs < pixels)
 	{
-		// run
-		int l = 0;
-		while (l < 65535 && ofs + l < pixels && aFrame[ofs + l] == aPrev[ofs + l]) l++;
-		data[out] = l; // value of 0 means run of 0 bytes 
-		out++;
+		// skip
+		int l = skiplength16(aFrame + ofs, aPrev + ofs, ofs + 65535 > pixels ? pixels - ofs : 65535);
+		data[out++] = l; // value of 0 means run of 0 bytes 
 		ofs += l;
 
 		if (ofs < pixels)
 		{
-			// skip
-			// one run + skip segment costs at least 2 bytes, so skip until at least 2 byte run is found
-			l = 0;
-			while (l < 65535 && ofs + l + 2 < pixels && !(aFrame[ofs + l] == aPrev[ofs + l] && aFrame[ofs + l + 1] == aPrev[ofs + l + 1])) l++;
-			if (ofs + l + 2 >= pixels)
-				l = pixels - ofs;
-			data[out] = l;
-			out++;
-			for (int i = 0; i < l; i++)
+			// can we run?
+			l = runlength16(aFrame + ofs, ofs + 32768 > pixels ? pixels - ofs : 32768);
+			if (l > 2)
 			{
-				data[out] = aFrame[ofs];
+				// run
+				data[out++] = -l;
+				data[out++] = aFrame[ofs];
+				ofs += l;
+			}
+			else
+			{
+				// skip
+				// one run + skip segment costs at least 2 bytes, so skip until at least 2 byte run is found
+				l = 0;
+				while (l < 32767 && ofs + l + 2 < pixels && skiplength16(aFrame + ofs + l, aPrev + ofs + l, 2) < 2) l++;
+				if (ofs + l + 2 >= pixels)
+					l = pixels - ofs;
+				data[out] = l;
 				out++;
-				ofs++;
+				for (int i = 0; i < l; i++)
+				{
+					data[out] = aFrame[ofs];
+					out++;
+					ofs++;
+				}
 			}
 		}
 	}
 	return out * 2;
 }
 
-int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs)
+int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs, int max)
 {
 	int bestlen = 0;
 	int bestofs = 0;
@@ -155,7 +199,7 @@ int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 			if (aFrame[ofs + bestlen] == aPrev[i + bestlen])
 			{
 				int l = 0;
-				while (l < 10 && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
+				while (l < max && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
 				{
 					l++;
 				}
@@ -219,29 +263,36 @@ int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 		// run
 		int o = 0;
 		int l = bestLZRun1(aFrame, aPrev, ofs, pixels, o);
-		data[out] = (o >> 0) & 0xff;
-		out++;
-		data[out] = (o >> 8) & 0xff;
-		out++;
-		data[out] = l;
-		out++;
+		data[out++] = (o >> 0) & 0xff;
+		data[out++] = (o >> 8) & 0xff;
+		data[out++] = l;
 		//printf("%d\n", l);
 
 		ofs += l;
 
 		if (ofs < pixels)
 		{
-			// copy
-			// one run + skip segment costs at least 4 bytes, so skip until at least 6 byte run is found			
-			l = 0;
-			while (l < 255 && ofs + l < pixels && bestLZRun0(aFrame, aPrev, ofs + l, pixels, o) < 6) l++;
-			data[out] = l;
-			out++;
-			for (int i = 0; i < l; i++)
+			// can we run?
+			l = runlength(aFrame + ofs, ofs + 128 > pixels ? pixels - ofs : 128);
+			if (l > 2)
 			{
-				data[out] = aFrame[ofs];
-				out++;
-				ofs++;
+				// run
+				data[out++] = -l;
+				data[out++] = aFrame[ofs];
+				ofs += l;
+			}
+			else
+			{
+				// copy
+				// one run + skip segment costs at least 5 bytes, so skip until at least 5 byte run is found
+				l = 0;
+				while (l < 127 && ofs + l < pixels && bestLZRun0(aFrame, aPrev, ofs + l, pixels, o, 5) < 5) l++;
+				data[out++] = l;
+				for (int i = 0; i < l; i++)
+				{
+					data[out++] = aFrame[ofs];
+					ofs++;
+				}
 			}
 		}
 	}
@@ -289,31 +340,37 @@ int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 		// run
 		int o = 0;
 		int l = bestLZRun2(aFrame, aPrev, ofs, pixels, o);
-		data[out] = (o >> 0) & 0xff;
-		out++;
-		data[out] = (o >> 8) & 0xff;
-		out++;
-		data[out] = (l >> 0) & 0xff;
-		out++;
-		data[out] = (l >> 8) & 0xff;
-		out++;
+		data[out++] = (o >> 0) & 0xff;
+		data[out++] = (o >> 8) & 0xff;
+		data[out++] = (l >> 0) & 0xff;
+		data[out++] = (l >> 8) & 0xff;
 		//printf("%d\n", l);
 
 		ofs += l;
 
 		if (ofs < pixels)
 		{
-			// copy
-			// one run + skip segment costs at least 5 bytes, so skip until at least 7 byte run is found
-			l = 0;
-			while (l < 255 && ofs + l < pixels && bestLZRun0(aFrame, aPrev, ofs + l, pixels, o) < 7) l++;
-			data[out] = l;
-			out++;
-			for (int i = 0; i < l; i++)
+			// can we run?
+			l = runlength(aFrame + ofs, ofs + 128 > pixels ? pixels - ofs : 128);
+			if (l > 2)
 			{
-				data[out] = aFrame[ofs];
-				out++;
-				ofs++;
+				// run
+				data[out++] = -l;
+				data[out++] = aFrame[ofs];
+				ofs += l;
+			}
+			else
+			{
+				// copy
+				// one run + skip segment costs at least 6 bytes, so skip until at least 6 byte run is found
+				l = 0;
+				while (l < 127 && ofs + l < pixels && bestLZRun0(aFrame, aPrev, ofs + l, pixels, o, 6) < 6) l++;
+				data[out++] = l;
+				for (int i = 0; i < l; i++)
+				{
+					data[out++] = aFrame[ofs];
+					ofs++;
+				}
 			}
 		}
 	}
@@ -324,7 +381,7 @@ int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 	return out;
 }
 
-int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, signed char& runofs)
+int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, signed char& runofs, int max)
 {
 	int bestlen = 0;
 	int bestofs = 0;
@@ -339,7 +396,7 @@ int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 			if (i + bestlen < end && aFrame[ofs + bestlen] == aPrev[i + bestlen])
 			{
 				int l = 0;
-				while (l < 255 && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
+				while (l < max && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
 				{
 					l++;
 				}
@@ -365,28 +422,36 @@ int encodeLZ3Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 	{
 		// run
 		signed char o = 0;
-		int l = bestLZRun3(aFrame, aPrev, ofs, pixels, o);
-		data[out] = o;
-		out++;
-		data[out] = l;
-		out++;
-		//printf("%d\n", l);
-
+		int l = bestLZRun3(aFrame, aPrev, ofs, pixels, o, 255);
+		data[out++] = o;		
+		data[out++] = l;		
+		
 		ofs += l;
 
 		if (ofs < pixels)
 		{
-			// copy
-			// one run + skip segment costs at least 3 bytes, so skip until at least 5 byte run is found
-			l = 0;
-			while (l < 255 && ofs + l < pixels && bestLZRun3(aFrame, aPrev, ofs + l, pixels, o) < 5) l++;
-			data[out] = l;
-			out++;
-			for (int i = 0; i < l; i++)
+			// can we run?
+			l = runlength(aFrame + ofs, ofs + 128 > pixels ? pixels - ofs : 128);
+			
+			if (l > 2)
 			{
-				data[out] = aFrame[ofs];
-				out++;
-				ofs++;
+				// run
+				data[out++] = -l;
+				data[out++] = aFrame[ofs];
+				ofs += l;
+			}
+			else
+			{
+				// copy
+				// one run + skip segment costs at least 4 bytes, so skip until at least 4 byte run is found
+				l = 0;
+				while (l < 127 && ofs + l < pixels && bestLZRun3(aFrame, aPrev, ofs + l, pixels, o, 4) < 4) l++;
+				data[out++] = l;
+				for (int i = 0; i < l; i++)
+				{
+					data[out++] = aFrame[ofs];
+					ofs++;
+				}
 			}
 		}
 	}

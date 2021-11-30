@@ -1,3 +1,7 @@
+// TODO
+// - set number of threads
+// - set frame rate
+// - set minimum run length
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,9 +40,22 @@ int gPointSample = 0;
 int gDither = 0;
 int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
-int gUseDelta8Frame = 1;
 int gSlowBlocks = 1;
 int gVerify = 0;
+
+int gUseBlack = 1;
+int gUseSame = 1;
+int gUseSingle = 1;
+int gUseRLE = 1;
+int gUseDelta8Frame = 1;
+int gUseDelta16Frame = 1;
+int gUseLRLE8 = 1;
+int gUseLRLE16 = 1;
+int gUseLDelta8 = 1;
+int gUseLDelta16 = 1;
+int gUseLZ1 = 1;
+int gUseLZ2 = 1;
+int gUseLZ3 = 1;
 
 class AddFrameTask : public Thread::PoolTask
 {
@@ -168,7 +185,7 @@ void loadframes(FliHeader& header, const char *filemask)
 		FindClose(hFind);
 	}
 	printf("\nWaiting for threads..\n");
-	threadpool.waitUntilDone();
+	threadpool.waitUntilDone(100, true);
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;
 	printf("Time elapsed: %3.3fs\n\n", elapsed_seconds.count());
@@ -291,7 +308,7 @@ void quantize(const FliHeader& header)
 	}
 
 	printf("Waiting for threads..\n");
-	threadpool.waitUntilDone();
+	threadpool.waitUntilDone(100, true);
 
 	int colors[512];
 	memset(colors, 0xff, 512 * sizeof(unsigned int));
@@ -373,7 +390,7 @@ public:
 		int allzero = 1;
 		for (int i = 0; allzero && i < pixels; i++)
 			allzero = (mFrame->mIndexPixels[i] == 0);
-		if (allzero)
+		if (allzero && gUseBlack)
 		{
 			mFrame->mFrameType = BLACKFRAME;
 			mFrame->mFrameData = 0;
@@ -382,7 +399,7 @@ public:
 			return;
 		}
 
-		if (mPrev)
+		if (mPrev && gUseSame)
 		{
 			// Check if previous frame is identical to current
 			int identical = 1;
@@ -398,7 +415,7 @@ public:
 			}
 		}
 		
-		if (gExtendedBlocks)
+		if (gExtendedBlocks && gUseSingle)
 		{
 			int allsingle = 1;
 			for (int i = 0; allsingle && i < pixels; i++)
@@ -427,55 +444,64 @@ public:
 			mFrame->mFrameType = FLI_COPY;
 			if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 
-			data = new unsigned char[pixels * 2];
-			len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-			if (gVerify) if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
-			if (len < mFrame->mFrameDataSize)
+			if (gUseRLE)
 			{
-				delete[] mFrame->mFrameData;
-				mFrame->mFrameData = data;
-				mFrame->mFrameDataSize = len;
-				mFrame->mFrameType = RLEFRAME;
-				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				data = new unsigned char[pixels * 2];
+				len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+				if (gVerify) if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
+				if (len < mFrame->mFrameDataSize)
+				{
+					delete[] mFrame->mFrameData;
+					mFrame->mFrameData = data;
+					mFrame->mFrameDataSize = len;
+					mFrame->mFrameType = RLEFRAME;
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				}
+				else
+				{
+					delete[] data;
+				}
 			}
-			else
-			{
-				delete[] data;
-			}			
 		}
 
 		if (gExtendedBlocks)
 		{
-			data = new unsigned char[pixels * 2];
-			len = encodeLinearRLE8Frame(data, mFrame->mIndexPixels, pixels);
-			if (gVerify) if (len > pixels) printf("overlong Lrle8 %d +%d\n", len, len - pixels);
-			if (len < mFrame->mFrameDataSize)
+			if (gUseLRLE8)
 			{
-				delete[] mFrame->mFrameData;
-				mFrame->mFrameData = data;
-				mFrame->mFrameDataSize = len;
-				mFrame->mFrameType = LINEARRLE8;
-				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-			}
-			else
-			{
-				delete[] data;
+				data = new unsigned char[pixels * 2];
+				len = encodeLinearRLE8Frame(data, mFrame->mIndexPixels, pixels);
+				if (gVerify) if (len > pixels) printf("overlong Lrle8 %d +%d\n", len, len - pixels);
+				if (len < mFrame->mFrameDataSize)
+				{
+					delete[] mFrame->mFrameData;
+					mFrame->mFrameData = data;
+					mFrame->mFrameDataSize = len;
+					mFrame->mFrameType = LINEARRLE8;
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				}
+				else
+				{
+					delete[] data;
+				}
 			}
 
-			data = new unsigned char[pixels * 2];
-			len = encodeLinearRLE16Frame((unsigned short*)data, (unsigned short*)(mFrame->mIndexPixels), pixels);
-			if (gVerify) if (len > pixels) printf("overlong Lrle16 %d +%d\n", len, len-pixels);
-			if (len < mFrame->mFrameDataSize)
+			if (gUseLRLE16)
 			{
-				delete[] mFrame->mFrameData;
-				mFrame->mFrameData = data;
-				mFrame->mFrameDataSize = len;
-				mFrame->mFrameType = LINEARRLE16;
-				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-			}
-			else
-			{
-				delete[] data;
+				data = new unsigned char[pixels * 2];
+				len = encodeLinearRLE16Frame((unsigned short*)data, (unsigned short*)(mFrame->mIndexPixels), pixels);
+				if (gVerify) if (len > pixels) printf("overlong Lrle16 %d +%d\n", len, len - pixels);
+				if (len < mFrame->mFrameDataSize)
+				{
+					delete[] mFrame->mFrameData;
+					mFrame->mFrameData = data;
+					mFrame->mFrameDataSize = len;
+					mFrame->mFrameType = LINEARRLE16;
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				}
+				else
+				{
+					delete[] data;
+				}
 			}
 		}
 
@@ -483,92 +509,107 @@ public:
 		{
 			if (gExtendedBlocks)
 			{
-				data = new unsigned char[pixels * 2];
-				len = encodeLinearDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-				if (gVerify) if (len > pixels) printf("overlong Ldelta8 %d +%d\n", len, len - pixels);
+				if (gUseLDelta8)
+				{
+					data = new unsigned char[pixels * 2];
+					len = encodeLinearDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+					if (gVerify) if (len > pixels) printf("overlong Ldelta8 %d +%d\n", len, len - pixels);
 
-				if (len < mFrame->mFrameDataSize)
-				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = LINEARDELTA8;
-					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				}
-				else
-				{
-					delete[] data;
+					if (len < mFrame->mFrameDataSize)
+					{
+						delete[] mFrame->mFrameData;
+						mFrame->mFrameData = data;
+						mFrame->mFrameDataSize = len;
+						mFrame->mFrameType = LINEARDELTA8;
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					}
+					else
+					{
+						delete[] data;
+					}
 				}
 
-				data = new unsigned char[pixels * 2];
-				len = encodeLinearDelta16Frame((unsigned short*)data, (unsigned short*)mFrame->mIndexPixels, (unsigned short*)mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-				if (gVerify) if (len > pixels) printf("overlong Ldelta16 %d +%d\n", len, len - pixels);
+				if (gUseLDelta16)
+				{
+					data = new unsigned char[pixels * 2];
+					len = encodeLinearDelta16Frame((unsigned short*)data, (unsigned short*)mFrame->mIndexPixels, (unsigned short*)mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+					if (gVerify) if (len > pixels) printf("overlong Ldelta16 %d +%d\n", len, len - pixels);
 
-				if (len < mFrame->mFrameDataSize)
-				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = LINEARDELTA16;
-					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				}
-				else
-				{
-					delete[] data;
+					if (len < mFrame->mFrameDataSize)
+					{
+						delete[] mFrame->mFrameData;
+						mFrame->mFrameData = data;
+						mFrame->mFrameDataSize = len;
+						mFrame->mFrameType = LINEARDELTA16;
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					}
+					else
+					{
+						delete[] data;
+					}
 				}
 
 				if (gSlowBlocks)
 				{
+					if (gUseLZ1)
+					{
+						data = new unsigned char[pixels * 2];
+						len = encodeLZ1Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz1 %d +%d\n", len, len - pixels);
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ1;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
+					if (gUseLZ2)
+					{
+						data = new unsigned char[pixels * 2];
+						len = encodeLZ2Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ2;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+				}
+
+				if (gUseLZ3)
+				{
 					data = new unsigned char[pixels * 2];
-					len = encodeLZ1Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong Lz1 %d +%d\n", len, len - pixels);
+					len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+					if (gVerify) if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
 
 					if (len < mFrame->mFrameDataSize)
 					{
 						delete[] mFrame->mFrameData;
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = LZ1;
+						mFrame->mFrameType = LZ3;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
 					{
 						delete[] data;
 					}
-
-					data = new unsigned char[pixels * 2];
-					len = encodeLZ2Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
-
-					if (len < mFrame->mFrameDataSize)
-					{
-						delete[] mFrame->mFrameData;
-						mFrame->mFrameData = data;
-						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = LZ2;
-						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-					}
-					else
-					{
-						delete[] data;
-					}
-				}
-
-				data = new unsigned char[pixels * 2];
-				len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-				if (gVerify) if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
-
-				if (len < mFrame->mFrameDataSize)
-				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = LZ3;
-					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				}
-				else
-				{
-					delete[] data;
 				}
 			}
 		
@@ -594,30 +635,27 @@ public:
 					}
 				}
 
-				data = new unsigned char[pixels * 2];
-				len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-				if (gVerify) if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
-
-				if (len < mFrame->mFrameDataSize)
+				if (gUseDelta16Frame)
 				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = DELTA16FRAME;
-					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				}
-				else
-				{
-					delete[] data;
-				}
+					data = new unsigned char[pixels * 2];
+					len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+					if (gVerify) if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
 
+					if (len < mFrame->mFrameDataSize)
+					{
+						delete[] mFrame->mFrameData;
+						mFrame->mFrameData = data;
+						mFrame->mFrameDataSize = len;
+						mFrame->mFrameType = DELTA16FRAME;
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					}
+					else
+					{
+						delete[] data;
+					}
+				}
 			}
 		}
-
-		// TODO: start frame from solid fill - pretty much same as linear-rle..
-		// TODO: start frame from nudged source - pretty much same as lz
-		// TODO: start frame from earlier frame - not sure if this is worth the effort
-		// TODO: non-destructive palette swap? - can't be parallelized
 	}
 };
 
@@ -647,7 +685,7 @@ void encode(const FliHeader& header)
 	}
 
 	printf("Waiting for threads..\n");
-	threadpool.waitUntilDone();
+	threadpool.waitUntilDone(100, true);
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;
 	printf("Time elapsed: %3.3fs\n\n", elapsed_seconds.count());
@@ -950,6 +988,7 @@ int main(int parc, char* pars[])
 	if (options[HALFRES]) gHalfRes = 1;
 	if (options[DITHER]) gDither = 1;
 	if (options[FASTSCALE]) gPointSample = 1;
+	if (options[VERIFY]) gVerify = 1;
 
 	FILE* outfile;
 	FliHeader header;
