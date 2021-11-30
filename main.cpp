@@ -46,16 +46,16 @@ int gVerify = 0;
 int gUseBlack = 1;
 int gUseSame = 1;
 int gUseSingle = 1;
-int gUseRLE = 1;
-int gUseDelta8Frame = 1;
-int gUseDelta16Frame = 1;
-int gUseLRLE8 = 1;
-int gUseLRLE16 = 1;
-int gUseLDelta8 = 1;
-int gUseLDelta16 = 1;
-int gUseLZ1 = 1;
-int gUseLZ2 = 1;
-int gUseLZ3 = 1;
+int gUseRLE = 0;
+int gUseDelta8Frame = 0;
+int gUseDelta16Frame = 0;
+int gUseLRLE8 = 0; // ok
+int gUseLRLE16 = 0; // ok
+int gUseLDelta8 = 1; // ?!
+int gUseLDelta16 = 0; // ok
+int gUseLZ1 = 0; // ok
+int gUseLZ2 = 0; // ok
+int gUseLZ3 = 0; // ok
 
 class AddFrameTask : public Thread::PoolTask
 {

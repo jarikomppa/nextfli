@@ -280,10 +280,22 @@ int decode_lineardelta8(unsigned char* buf, unsigned char *prev, unsigned char* 
 		}
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed char)data[idx++];
+			if (copylen >= 0)
 			{
-				buf[ofs++] = data[idx++];
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				unsigned char c = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = c;
+				}
 			}
 		}
 	}
@@ -305,10 +317,22 @@ int decode_lineardelta16(unsigned short* buf, unsigned short* prev, unsigned sho
 		}
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed short)data[idx++];
+			if (copylen >= 0)
 			{
-				buf[ofs++] = data[idx++];
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				unsigned short c = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = c;
+				}
 			}
 		}
 	}
@@ -331,10 +355,22 @@ int decode_lz1(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 		}
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed char)data[idx++];
+			if (copylen >= 0)
 			{
-				buf[ofs++] = data[idx++];
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				unsigned char c = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = c;
+				}
 			}
 		}
 	}
@@ -358,10 +394,22 @@ int decode_lz2(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 		}
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed char)data[idx++];
+			if (copylen >= 0)
 			{
-				buf[ofs++] = data[idx++];
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				unsigned char c = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = c;
+				}
 			}
 		}
 	}
@@ -383,10 +431,22 @@ int decode_lz3(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 		}
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed char)data[idx++];
+			if (copylen >= 0)
 			{
-				buf[ofs++] = data[idx++];
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				unsigned char c = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = c;
+				}
 			}
 		}
 	}
@@ -455,13 +515,13 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 
 	if (readbytes != aFrame->mFrameDataSize)
 	{
-		printf("Block length mismatch\n");
+		printf("Block length mismatch (%d)\n", __LINE__);
 	}
 
 	for (int i = 0; i < aWidth * aHeight; i++)
 		if (aFrame->mIndexPixels[i] != buf[i])
 		{
-			printf("Encoding error\n");
+			printf("Encoding error (%d)\n", __LINE__);
 		}
 	delete[] buf;
 	return 0;

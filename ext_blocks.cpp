@@ -15,7 +15,7 @@ int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels)
 	while (ofs < pixels)
 	{
 		// run
-		int l = runlength(src + ofs, (ofs + 255) < pixels ? pixels - ofs : 255);
+		int l = runlength(src + ofs, (ofs + 255) > pixels ? pixels - ofs : 255);
 		data[out++] = l; // value of 0 means run of 0 bytes 
 		data[out++] = src[ofs]; // could skip this on 0, but that hardly ever happens
 		ofs += l;
@@ -106,7 +106,7 @@ int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned
 		if (ofs < pixels)
 		{
 			// can we run?
-			l = runlength(aFrame + ofs, ofs + 255 > pixels ? pixels - ofs : 255);
+			int l = runlength(aFrame + ofs, ofs + 128 > pixels ? pixels - ofs : 128);
 			if (l > 2)
 			{
 				// run
@@ -120,14 +120,13 @@ int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned
 				// one skip + copy segment costs at least 2 bytes, so skip until at least 2 byte run is found
 				l = 0;
 				while (l < 127 && ofs + l + 2 < pixels && skiplength(aFrame + ofs + l, aPrev + ofs + l, 2) < 2) l++;
+								
 				if (ofs + l + 2 >= pixels)
 					l = pixels - ofs;
-				data[out] = l;
-				out++;
+				data[out++] = l;
 				for (int i = 0; i < l; i++)
 				{
-					data[out] = aFrame[ofs];
-					out++;
+					data[out++] = aFrame[ofs];
 					ofs++;
 				}
 			}
@@ -135,6 +134,7 @@ int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned
 	}
 	return out;
 }
+
 
 int skiplength16(unsigned short* data, unsigned short* prev, int max)
 {
@@ -175,12 +175,10 @@ int encodeLinearDelta16Frame(unsigned short* data, unsigned short* aFrame, unsig
 				while (l < 32767 && ofs + l + 2 < pixels && skiplength16(aFrame + ofs + l, aPrev + ofs + l, 2) < 2) l++;
 				if (ofs + l + 2 >= pixels)
 					l = pixels - ofs;
-				data[out] = l;
-				out++;
+				data[out++] = l;
 				for (int i = 0; i < l; i++)
 				{
-					data[out] = aFrame[ofs];
-					out++;
+					data[out++] = aFrame[ofs];
 					ofs++;
 				}
 			}
