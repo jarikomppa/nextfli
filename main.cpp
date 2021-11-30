@@ -38,6 +38,7 @@ int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
 int gUseDelta8Frame = 1;
 int gSlowBlocks = 1;
+int gVerify = 0;
 
 class AddFrameTask : public Thread::PoolTask
 {
@@ -103,7 +104,7 @@ public:
 		else
 		{
 			stbir_resize_uint8((const unsigned char*)data, x, y, x*4,
-				(unsigned char*)fr->mRgbPixels, wd, ht, wd*4,
+				(unsigned char*)fr->mRgbPixels + header.mWidth * 4 * yofs + xofs * 4, wd, ht, header.mWidth * 4,
 				4);
 		}
 		stbi_image_free((void*)data);
@@ -114,6 +115,7 @@ void addFrame(char* fn, const FliHeader& header, Thread::Pool &threadpool)
 {
 	Frame* fr = new Frame;
 	fr->mRgbPixels = new unsigned int[header.mHeight * header.mWidth];
+	memset(fr->mRgbPixels, 0, sizeof(int) * header.mHeight * header.mWidth);
 
 	if (gRoot == NULL)
 	{
@@ -249,9 +251,20 @@ public:
 		{
 			int c = mFrame->mRgbPixels[i];
 			// Map to 512 color space
-			mFrame->mRgbPixels[i] = (((c >> 5) & 0x7) << 0) | (((c >> 13) & 0x7) << 3) | (((c >> 21) & 0x7) << 6);
+			int r = ((c >> 16) & 0xff);
+			int g = ((c >> 8) & 0xff);
+			int b = ((c >> 0) & 0xff);
+			// rounding
+			r = (r + 15) >> 5;
+			if (r > 7) r = 7;
+			g = (g + 15) >> 5;
+			if (g > 7) g = 7;
+			b = (b + 15) >> 5;
+			if (b > 7) b = 7;
+
+			mFrame->mRgbPixels[i] = (r << 6) | (g << 3) | b;
 			// collect used colors
-			colors[mFrame->mRgbPixels[i]] = (c & 0xe0e0e0) >> 5;
+			colors[mFrame->mRgbPixels[i]] = (r << 16) | (g << 8) | (b);
 		}
 	}
 };
@@ -365,7 +378,7 @@ public:
 			mFrame->mFrameType = BLACKFRAME;
 			mFrame->mFrameData = 0;
 			mFrame->mFrameDataSize = 0;
-			verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+			if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 			return;
 		}
 
@@ -380,7 +393,7 @@ public:
 				mFrame->mFrameType = SAMEFRAME;
 				mFrame->mFrameData = 0;
 				mFrame->mFrameDataSize = 0;
-				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
 		}
@@ -396,7 +409,7 @@ public:
 				mFrame->mFrameData = new unsigned char[1];
 				mFrame->mFrameDataSize = 1;
 				mFrame->mFrameData[0] = mFrame->mIndexPixels[0];
-				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
 		}
@@ -412,18 +425,18 @@ public:
 			mFrame->mFrameDataSize = mHeader.mWidth * mHeader.mHeight;
 			memcpy(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 			mFrame->mFrameType = FLI_COPY;
-			verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+			if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 
 			data = new unsigned char[pixels * 2];
 			len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-			if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
+			if (gVerify) if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
 			if (len < mFrame->mFrameDataSize)
 			{
 				delete[] mFrame->mFrameData;
 				mFrame->mFrameData = data;
 				mFrame->mFrameDataSize = len;
 				mFrame->mFrameType = RLEFRAME;
-				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 			}
 			else
 			{
@@ -435,14 +448,14 @@ public:
 		{
 			data = new unsigned char[pixels * 2];
 			len = encodeLinearRLE8Frame(data, mFrame->mIndexPixels, pixels);
-			if (len > pixels) printf("overlong Lrle8 %d +%d\n", len, len - pixels);
+			if (gVerify) if (len > pixels) printf("overlong Lrle8 %d +%d\n", len, len - pixels);
 			if (len < mFrame->mFrameDataSize)
 			{
 				delete[] mFrame->mFrameData;
 				mFrame->mFrameData = data;
 				mFrame->mFrameDataSize = len;
 				mFrame->mFrameType = LINEARRLE8;
-				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 			}
 			else
 			{
@@ -451,14 +464,14 @@ public:
 
 			data = new unsigned char[pixels * 2];
 			len = encodeLinearRLE16Frame((unsigned short*)data, (unsigned short*)(mFrame->mIndexPixels), pixels);
-			if (len > pixels) printf("overlong Lrle16 %d +%d\n", len, len-pixels);
+			if (gVerify) if (len > pixels) printf("overlong Lrle16 %d +%d\n", len, len-pixels);
 			if (len < mFrame->mFrameDataSize)
 			{
 				delete[] mFrame->mFrameData;
 				mFrame->mFrameData = data;
 				mFrame->mFrameDataSize = len;
 				mFrame->mFrameType = LINEARRLE16;
-				verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 			}
 			else
 			{
@@ -472,7 +485,7 @@ public:
 			{
 				data = new unsigned char[pixels * 2];
 				len = encodeLinearDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-				if (len > pixels) printf("overlong Ldelta8 %d +%d\n", len, len - pixels);
+				if (gVerify) if (len > pixels) printf("overlong Ldelta8 %d +%d\n", len, len - pixels);
 
 				if (len < mFrame->mFrameDataSize)
 				{
@@ -480,7 +493,7 @@ public:
 					mFrame->mFrameData = data;
 					mFrame->mFrameDataSize = len;
 					mFrame->mFrameType = LINEARDELTA8;
-					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				}
 				else
 				{
@@ -489,7 +502,7 @@ public:
 
 				data = new unsigned char[pixels * 2];
 				len = encodeLinearDelta16Frame((unsigned short*)data, (unsigned short*)mFrame->mIndexPixels, (unsigned short*)mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-				if (len > pixels) printf("overlong Ldelta16 %d +%d\n", len, len - pixels);
+				if (gVerify) if (len > pixels) printf("overlong Ldelta16 %d +%d\n", len, len - pixels);
 
 				if (len < mFrame->mFrameDataSize)
 				{
@@ -497,7 +510,7 @@ public:
 					mFrame->mFrameData = data;
 					mFrame->mFrameDataSize = len;
 					mFrame->mFrameType = LINEARDELTA16;
-					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				}
 				else
 				{
@@ -508,7 +521,7 @@ public:
 				{
 					data = new unsigned char[pixels * 2];
 					len = encodeLZ1Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (len > pixels) printf("overlong Lz1 %d +%d\n", len, len - pixels);
+					if (gVerify) if (len > pixels) printf("overlong Lz1 %d +%d\n", len, len - pixels);
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -516,7 +529,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = LZ1;
-						verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
 					{
@@ -525,7 +538,7 @@ public:
 
 					data = new unsigned char[pixels * 2];
 					len = encodeLZ2Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
+					if (gVerify) if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -533,7 +546,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = LZ2;
-						verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
 					{
@@ -543,7 +556,7 @@ public:
 
 				data = new unsigned char[pixels * 2];
 				len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-				if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
+				if (gVerify) if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
 
 				if (len < mFrame->mFrameDataSize)
 				{
@@ -551,7 +564,7 @@ public:
 					mFrame->mFrameData = data;
 					mFrame->mFrameDataSize = len;
 					mFrame->mFrameType = LZ3;
-					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				}
 				else
 				{
@@ -565,7 +578,7 @@ public:
 				{
 					data = new unsigned char[pixels * 2];
 					len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-					if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
+					if (gVerify) if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -573,7 +586,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = DELTA8FRAME;
-						verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
 					{
@@ -583,7 +596,7 @@ public:
 
 				data = new unsigned char[pixels * 2];
 				len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-				if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
+				if (gVerify) if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
 
 				if (len < mFrame->mFrameDataSize)
 				{
@@ -591,7 +604,7 @@ public:
 					mFrame->mFrameData = data;
 					mFrame->mFrameDataSize = len;
 					mFrame->mFrameType = DELTA16FRAME;
-					verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				}
 				else
 				{
@@ -880,7 +893,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE };
+enum optionIndex { UNKNOWN, HELP, FLC, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE, VERIFY };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
@@ -892,6 +905,7 @@ const option::Descriptor usage[] =
 	{ HALFRES,      0, "l", "halfres", option::Arg::None,        " -l --halfres\t Reduce output resolution to half x, half y (default: don't)"},
 	{ DITHER,       0, "d", "dither", option::Arg::None,         " -d --dither\t Use ordered dither (default: don't)"},
 	{ FASTSCALE,    0, "p", "fastscale", option::Arg::None,      " -p --fastscale\t Use fast image scaling (default: don't)"},
+	{ VERIFY,       0, "v", "verify", option::Arg::None,         " -v --verify\tVerify encoding (default: don't)"},
 	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f -d"},
 	{ 0,0,0,0,0,0 }
 };
