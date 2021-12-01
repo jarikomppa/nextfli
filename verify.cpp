@@ -272,30 +272,34 @@ int decode_lineardelta8(unsigned char* buf, unsigned char *prev, unsigned char* 
 	int ofs = 0;
 	while (ofs < pixels)
 	{
-		int runlen = data[idx++];
-		for (int i = 0; i < runlen; i++)
+		int runlen = (signed char)data[idx++];
+		if (runlen < 0)
 		{
-			buf[ofs] = prev[ofs];
-			ofs++;
+			runlen = -runlen;
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs] = prev[ofs];
+				ofs++;
+			}
 		}
+		else
+		{
+			int color = data[idx++];
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs] = color;
+				ofs++;
+			}
+		}
+
 		if (ofs < pixels)
 		{
-			int copylen = (signed char)data[idx++];
-			if (copylen >= 0)
+			int copylen = data[idx++];
+			for (int i = 0; i < copylen; i++)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = data[idx++];
-				}
-			}
-			else
-			{
-				unsigned char c = data[idx++];
-				copylen = -copylen;
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = c;
-				}
+				buf[ofs] = data[idx];
+				ofs++;
+				idx++;
 			}
 		}
 	}
@@ -309,30 +313,34 @@ int decode_lineardelta16(unsigned short* buf, unsigned short* prev, unsigned sho
 	int ofs = 0;
 	while (ofs < pixels)
 	{
-		int runlen = data[idx++];
-		for (int i = 0; i < runlen; i++)
+		int runlen = (signed short)data[idx++];
+		if (runlen < 0)
 		{
-			buf[ofs] = prev[ofs];
-			ofs++;
+			runlen = -runlen;
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs] = prev[ofs];
+				ofs++;
+			}
 		}
+		else
+		{
+			int color = data[idx++];
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs] = color;
+				ofs++;
+			}
+		}
+
 		if (ofs < pixels)
 		{
-			int copylen = (signed short)data[idx++];
-			if (copylen >= 0)
+			int copylen = data[idx++];
+			for (int i = 0; i < copylen; i++)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = data[idx++];
-				}
-			}
-			else
-			{
-				unsigned short c = data[idx++];
-				copylen = -copylen;
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = c;
-				}
+				buf[ofs] = data[idx];
+				ofs++;
+				idx++;
 			}
 		}
 	}
@@ -346,31 +354,32 @@ int decode_lz1(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	int ofs = 0;
 	while (ofs < pixels)
 	{
-		int runofs = data[idx++];
-		runofs |= data[idx++] << 8;
-		int runlen = data[idx++];
-		for (int i = 0; i < runlen; i++)
+		int runlen = (signed char)data[idx++];
+		if (runlen > 0)
 		{
-			buf[ofs++] = prev[runofs++];
+			int runofs = data[idx++];
+			runofs |= data[idx++] << 8;
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs++] = prev[runofs++];
+			}
 		}
+		else
+		{
+			runlen = -runlen;
+			unsigned char c = data[idx++];
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs++] = c;
+			}
+		}
+
 		if (ofs < pixels)
 		{
-			int copylen = (signed char)data[idx++];
-			if (copylen >= 0)
+			int copylen = data[idx++];
+			for (int i = 0; i < copylen; i++)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = data[idx++];
-				}
-			}
-			else
-			{
-				unsigned char c = data[idx++];
-				copylen = -copylen;
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = c;
-				}
+				buf[ofs++] = data[idx++];
 			}
 		}
 	}
@@ -384,32 +393,33 @@ int decode_lz2(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	int ofs = 0;
 	while (ofs < pixels)
 	{
-		int runofs = data[idx++];
-		runofs |= data[idx++] << 8;
-		int runlen = data[idx++];
-		runlen |= data[idx++] << 8;
-		for (int i = 0; i < runlen; i++)
+		int runlen = (signed char)data[idx++];
+		if (runlen < 0)
 		{
-			buf[ofs++] = prev[runofs++];
+			runlen <<= 8;
+			runlen |= data[idx++];
+			runlen = -runlen;
+			int runofs = data[idx++];
+			runofs |= data[idx++] << 8;
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs++] = prev[runofs++];
+			}
+		}
+		else
+		{
+			unsigned char c = data[idx++];
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs++] = c;
+			}
 		}
 		if (ofs < pixels)
 		{
-			int copylen = (signed char)data[idx++];
-			if (copylen >= 0)
+			int copylen = data[idx++];
+			for (int i = 0; i < copylen; i++)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = data[idx++];
-				}
-			}
-			else
-			{
-				unsigned char c = data[idx++];
-				copylen = -copylen;
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = c;
-				}
+				buf[ofs++] = data[idx++];
 			}
 		}
 	}
@@ -423,30 +433,30 @@ int decode_lz3(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	int ofs = 0;
 	while (ofs < pixels)
 	{
-		int runofs = ((signed char)data[idx++]) + ofs;
-		int runlen = data[idx++];
-		for (int i = 0; i < runlen; i++)
+		int runlen = (signed char)data[idx++];
+		if (runlen > 0)
 		{
-			buf[ofs++] = prev[runofs++];
+			int runofs = ((signed char)data[idx++]) + ofs;
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs++] = prev[runofs++];
+			}
+		}
+		else
+		{
+			runlen = -runlen;
+			unsigned char c = data[idx++];
+			for (int i = 0; i < runlen; i++)
+			{
+				buf[ofs++] = c;
+			}
 		}
 		if (ofs < pixels)
 		{
-			int copylen = (signed char)data[idx++];
-			if (copylen >= 0)
+			int copylen = data[idx++];
+			for (int i = 0; i < copylen; i++)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = data[idx++];
-				}
-			}
-			else
-			{
-				unsigned char c = data[idx++];
-				copylen = -copylen;
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = c;
-				}
+				buf[ofs++] = data[idx++];
 			}
 		}
 	}
