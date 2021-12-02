@@ -484,10 +484,23 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed char)data[idx++];
+			if (copylen >= 0)
 			{
-				buf[ofs++] = data[idx++];
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				int runlen = -copylen;
+				int runofs = data[idx++];
+				runofs |= data[idx++] << 8;
+				for (int i = 0; i < runlen; i++)
+				{
+					buf[ofs++] = prev[runofs++];
+				}
 			}
 		}
 	}
@@ -559,12 +572,26 @@ int decode_lz3(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				buf[ofs++] = c;
 			}
 		}
+
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int runlen = (signed char)data[idx++];
+			
+			if (runlen > 0)
 			{
-				buf[ofs++] = data[idx++];
+				int runofs = ((signed char)data[idx++]) + ofs;
+				for (int i = 0; i < runlen; i++)
+				{
+					buf[ofs++] = prev[runofs++];
+				}
+			}
+			else
+			{
+				runlen = -runlen;
+				for (int i = 0; i < runlen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
 			}
 		}
 	}

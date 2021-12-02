@@ -939,10 +939,10 @@ void output_flx(FliHeader& header, FILE* outfile)
 	if (framecounts[10]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
 	if (framecounts[11]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
 	if (framecounts[12]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
-	if (framecounts[15]) printf("4 lz scheme 1b  %5d (%5d -%5d bytes)\n", framecounts[15], frameminsize[15], framemaxsize[15]);
-	if (framecounts[13]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
-	if (framecounts[16]) printf("5 lz scheme 2b  %5d (%5d -%5d bytes)\n", framecounts[16], frameminsize[16], framemaxsize[16]);
-	if (framecounts[14]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[14], frameminsize[14], framemaxsize[14]);
+	if (framecounts[13]) printf("4 lz scheme 1b  %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+	if (framecounts[14]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[14], frameminsize[14], framemaxsize[14]);
+	if (framecounts[15]) printf("5 lz scheme 2b  %5d (%5d -%5d bytes)\n", framecounts[15], frameminsize[15], framemaxsize[15]);
+	if (framecounts[16]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[16], frameminsize[16], framemaxsize[16]);
 
 	header.mSize = ftell(outfile);
 	header.mFrames = frames;
