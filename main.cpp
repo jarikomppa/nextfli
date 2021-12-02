@@ -26,14 +26,6 @@
 
 #include <windows.h> // findfirst
 
-// ba
-//int frames = 2037;
-// cube
-//int frames = 240;
-// ba_hvy
-int frames = 3671;
-
-
 Frame* gRoot = NULL, * gLast = NULL;
 int gHalfRes = 0;
 int gPointSample = 0;
@@ -49,14 +41,15 @@ int gUseSingle = 1;
 int gUseRLE = 1;
 int gUseDelta8Frame = 1;
 int gUseDelta16Frame = 1;
+
 int gUseLRLE8 = 1;
-int gUseLRLE16 = 1;
+int gUseLRLE16 = 0;
 int gUseLDelta8 = 1;
-int gUseLDelta16 = 1;
-int gUseLZ1 = 1;
-int gUseLZ2 = 1;
+int gUseLDelta16 = 0;
+int gUseLZ1 = 0;
+int gUseLZ2 = 0;
 int gUseLZ1b = 1;
-int gUseLZ2b = 1;
+int gUseLZ2b = 0;
 int gUseLZ3 = 1;
 
 class AddFrameTask : public Thread::PoolTask
@@ -707,6 +700,7 @@ void encode(const FliHeader& header)
 
 	Frame* walker = gRoot;
 	Frame* prev = 0;
+	int fr = 0;
 	while (walker)
 	{
 		EncodeTask* t = new EncodeTask(walker, prev, header);
@@ -714,11 +708,13 @@ void encode(const FliHeader& header)
 #ifdef NDEBUG
 		threadpool.addWork(t);
 #else
-//		threadpool.addWork(t);
-		t->work();
+		threadpool.addWork(t);
+//		t->work();
 #endif
 		prev = walker;
 		walker = walker->mNext;
+		fr++;
+		printf("%d%% tasks started \r", fr * 100 / header.mFrames);
 	}
 
 	printf("Waiting for threads..\n");
