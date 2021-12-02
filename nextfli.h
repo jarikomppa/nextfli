@@ -129,9 +129,9 @@ int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ2bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLinearDelta16Frame(unsigned short* data, unsigned short* aFrame, unsigned short* aPrev, int pixels);
+int encodeLinearDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLinearRLE16Frame(unsigned short* data, unsigned short* src, int pixels);
+int encodeLinearRLE16Frame(unsigned char* data, unsigned char* src, int pixels);
 int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels);
 
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight);

@@ -230,10 +230,22 @@ int decode_linearrle8(unsigned char *buf, unsigned char *data, int datasize, int
 		}
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed char)data[idx++];
+			if (copylen > 0)
 			{
-				buf[ofs++] = data[idx++];
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				rundata = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = rundata;
+				}
 			}
 		}
 	}
@@ -241,17 +253,20 @@ int decode_linearrle8(unsigned char *buf, unsigned char *data, int datasize, int
 	return idx;
 }
 
-int decode_linearrle16(unsigned short* buf, unsigned short* data, int datasize, int pixels)
+int decode_linearrle16(unsigned char* buf, unsigned char* data, int datasize, int pixels)
 {
 	int idx = 0;
 	int ofs = 0;
 	while (ofs < pixels)
 	{
 		int runlen = data[idx++];
-		int rundata = data[idx++];
+		runlen |= data[idx++] << 8;
+		int rundata1 = data[idx++];
+		int rundata2 = data[idx++];
 		for (int i = 0; i < runlen; i++)
 		{
-			buf[ofs++] = rundata;
+			buf[ofs++] = rundata1;
+			buf[ofs++] = rundata2;
 		}
 		if (ofs < pixels)
 		{
@@ -263,7 +278,8 @@ int decode_linearrle16(unsigned short* buf, unsigned short* data, int datasize, 
 		}
 	}
 	if (ofs > pixels) printf("wrote over buffer Lrle16 %d %d\n", ofs, pixels);
-	return idx * 2;
+	
+	return idx;
 }
 
 int decode_lineardelta8(unsigned char* buf, unsigned char *prev, unsigned char* data, int datasize, int pixels)
@@ -294,12 +310,24 @@ int decode_lineardelta8(unsigned char* buf, unsigned char *prev, unsigned char* 
 
 		if (ofs < pixels)
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int copylen = (signed char)data[idx++];
+			if (copylen > 0)
 			{
-				buf[ofs] = data[idx];
-				ofs++;
-				idx++;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs] = data[idx];
+					ofs++;
+					idx++;
+				}
+			}
+			else
+			{
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs] = prev[ofs];
+					ofs++;
+				}
 			}
 		}
 	}
@@ -307,17 +335,18 @@ int decode_lineardelta8(unsigned char* buf, unsigned char *prev, unsigned char* 
 	return idx;
 }
 
-int decode_lineardelta16(unsigned short* buf, unsigned short* prev, unsigned short* data, int datasize, int pixels)
+int decode_lineardelta16(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
 {
 	int idx = 0;
 	int ofs = 0;
 	while (ofs < pixels)
 	{
-		int runlen = (signed short)data[idx++];
+		int runlen = data[idx++];
+		runlen |= (signed char)data[idx++] << 8;
 		if (runlen < 0)
 		{
 			runlen = -runlen;
-			for (int i = 0; i < runlen; i++)
+			for (int i = 0; i < runlen*2; i++)
 			{
 				buf[ofs] = prev[ofs];
 				ofs++;
@@ -325,11 +354,12 @@ int decode_lineardelta16(unsigned short* buf, unsigned short* prev, unsigned sho
 		}
 		else
 		{
-			int color = data[idx++];
+			int color1 = data[idx++];
+			int color2 = data[idx++];
 			for (int i = 0; i < runlen; i++)
 			{
-				buf[ofs] = color;
-				ofs++;
+				buf[ofs++] = color1;
+				buf[ofs++] = color2;
 			}
 		}
 
@@ -338,14 +368,15 @@ int decode_lineardelta16(unsigned short* buf, unsigned short* prev, unsigned sho
 			int copylen = data[idx++];
 			for (int i = 0; i < copylen; i++)
 			{
-				buf[ofs] = data[idx];
-				ofs++;
-				idx++;
+				buf[ofs++] = data[idx++];
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer Ldelta16 %d %d\n", ofs, pixels);
-	return idx * 2;
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer Ldelta16 %d %d\n", ofs, pixels);
+	}
+	return idx;
 }
 
 int decode_lz1(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
@@ -578,13 +609,13 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 		readbytes = decode_linearrle8(buf,  aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
 		break;
 	case LINEARRLE16:
-		readbytes = decode_linearrle16((unsigned short*)buf, (unsigned short*)aFrame->mFrameData, aFrame->mFrameDataSize / 2, aWidth * aHeight / 2);
+		readbytes = decode_linearrle16(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
 		break;
 	case LINEARDELTA8:
 		readbytes = decode_lineardelta8(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
 		break;
 	case LINEARDELTA16:
-		readbytes = decode_lineardelta16((unsigned short*)buf, (unsigned short*)aPrev->mIndexPixels, (unsigned short*)aFrame->mFrameData, aFrame->mFrameDataSize / 2, aWidth * aHeight / 2);
+		readbytes = decode_lineardelta16(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
 		break;
 	case LZ1:
 		readbytes = decode_lz1(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
