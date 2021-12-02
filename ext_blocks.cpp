@@ -225,6 +225,166 @@ int bestLZRun1(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 			if (aFrame[ofs + bestlen] == aPrev[i + bestlen])
 			{
 				int l = 0;
+				while (l < 255 && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
+				{
+					l++;
+				}
+
+				if (l > bestlen)
+				{
+					bestlen = l;
+					bestofs = i;
+					if (bestlen > 254)
+					{
+						runofs = bestofs;
+						return 255;
+					}
+				}
+			}
+		}
+	}
+	runofs = bestofs;
+	return bestlen;
+}
+
+int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
+{
+	//	auto start = std::chrono::steady_clock::now();
+	int ofs = 0;
+	int out = 0;
+	while (ofs < pixels)
+	{
+		// run
+		int o = 0;
+		int l = bestLZRun1(aFrame, aPrev, ofs, pixels, o);
+		data[out++] = (o >> 0) & 0xff;
+		data[out++] = (o >> 8) & 0xff;
+		data[out++] = l;
+		//printf("%d\n", l);
+
+		ofs += l;
+
+		if (ofs < pixels)
+		{
+			// can we run?
+			l = runlength(aFrame + ofs, ofs + 128 > pixels ? pixels - ofs : 128);
+			if (l > 2)
+			{
+				// run
+				data[out++] = -l;
+				data[out++] = aFrame[ofs];
+				ofs += l;
+			}
+			else
+			{
+				// copy
+				// one run + skip segment costs at least 5 bytes, so skip until at least 5 byte run is found
+				l = 0;
+				while (l < 127 && ofs + l < pixels && bestLZRun0(aFrame, aPrev, ofs + l, pixels, o, 5) < 5) l++;
+				data[out++] = l;
+				for (int i = 0; i < l; i++)
+				{
+					data[out++] = aFrame[ofs];
+					ofs++;
+				}
+			}
+		}
+	}
+	//	auto end = std::chrono::steady_clock::now();
+	//	std::chrono::duration<double> elapsed_seconds = end - start;
+		//printf("Time elapsed: %3.3fs - %d bytes\n", elapsed_seconds.count(), out);
+
+	return out;
+}
+
+int bestLZRun2(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs)
+{
+	int bestlen = 0;
+	int bestofs = 0;
+	for (int i = 0; i < pixels - bestlen; i++)
+	{
+		{
+			if (aFrame[ofs + bestlen] == aPrev[i + bestlen])
+			{
+				int l = 0;
+				while (aFrame[ofs + l] == aPrev[i + l] && (ofs + l) < pixels)
+				{
+					l++;
+				}
+
+				if (l > bestlen)
+				{
+					bestlen = l;
+					bestofs = i;
+				}
+			}
+		}
+	}
+	runofs = bestofs;
+	return bestlen;
+}
+
+int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
+{
+	//	auto start = std::chrono::steady_clock::now();
+	int ofs = 0;
+	int out = 0;
+	while (ofs < pixels)
+	{
+		// run
+		int o = 0;
+		int l = bestLZRun2(aFrame, aPrev, ofs, pixels, o);
+		data[out++] = (o >> 0) & 0xff;
+		data[out++] = (o >> 8) & 0xff;
+		data[out++] = (l >> 0) & 0xff;
+		data[out++] = (l >> 8) & 0xff;
+		//printf("%d\n", l);
+
+		ofs += l;
+
+		if (ofs < pixels)
+		{
+			// can we run?
+			l = runlength(aFrame + ofs, ofs + 128 > pixels ? pixels - ofs : 128);
+			if (l > 2)
+			{
+				// run
+				data[out++] = -l;
+				data[out++] = aFrame[ofs];
+				ofs += l;
+			}
+			else
+			{
+				// copy
+				// one run + skip segment costs at least 6 bytes, so skip until at least 6 byte run is found
+				l = 0;
+				while (l < 127 && ofs + l < pixels && bestLZRun0(aFrame, aPrev, ofs + l, pixels, o, 6) < 6) l++;
+				data[out++] = l;
+				for (int i = 0; i < l; i++)
+				{
+					data[out++] = aFrame[ofs];
+					ofs++;
+				}
+			}
+		}
+	}
+	//	auto end = std::chrono::steady_clock::now();
+	//	std::chrono::duration<double> elapsed_seconds = end - start;
+		//printf("Time elapsed: %3.3fs - %d bytes\n", elapsed_seconds.count(), out);
+
+	return out;
+}
+
+int bestLZRun1b(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs)
+{
+	int bestlen = 0;
+	int bestofs = 0;
+	for (int i = 0; i < pixels - bestlen; i++)
+	{
+		{
+			if (aFrame[ofs + bestlen] == aPrev[i + bestlen])
+			{
+				int l = 0;
 				while (l < 127 && (ofs + l) < pixels && aFrame[ofs + l] == aPrev[i + l])
 				{
 					l++;
@@ -247,7 +407,7 @@ int bestLZRun1(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 	return bestlen;
 }
 
-int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
+int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
 {
 	int ofs = 0;
 	int out = 0;
@@ -255,7 +415,7 @@ int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 	{
 		// run
 		int o = 0;
-		int lz = bestLZRun1(aFrame, aPrev, ofs, pixels, o);
+		int lz = bestLZRun1b(aFrame, aPrev, ofs, pixels, o);
 		int lr = runlength(aFrame + ofs, ofs + 128 > pixels ? pixels - ofs : 128);
 		if (lr >= lz)
 		{
@@ -294,7 +454,7 @@ int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 	return out;
 }
 
-int bestLZRun2(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs)
+int bestLZRun2b(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs)
 {
 	int bestlen = 0;
 	int bestofs = 0;
@@ -321,7 +481,7 @@ int bestLZRun2(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels,
 	return bestlen;
 }
 
-int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
+int encodeLZ2bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
 {
 	int ofs = 0;
 	int out = 0;
@@ -329,7 +489,7 @@ int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 	{
 		// run
 		int o = 0;
-		int lz = bestLZRun2(aFrame, aPrev, ofs, pixels, o);
+		int lz = bestLZRun2b(aFrame, aPrev, ofs, pixels, o);
 		int lr = runlength(aFrame + ofs, ofs + 127 > pixels ? pixels - ofs : 127);
 		if (lr >= lz)
 		{

@@ -13,8 +13,10 @@ enum FRAMETYPE
 	LINEARDELTA8 = 10,
 	LINEARDELTA16 = 11,
 	LZ1 = 12,
-	LZ2 = 13,
-	LZ3 = 14
+	LZ1B = 13,
+	LZ2 = 14,
+	LZ2B = 15,
+	LZ3 = 16
 }; 
 
 // FLI header
@@ -125,6 +127,8 @@ int encodeRLEFrame(unsigned char* aRLEframe, unsigned char* aIndexPixels, int wi
 int encodeLZ3Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ2bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLinearDelta16Frame(unsigned short* data, unsigned short* aFrame, unsigned short* aPrev, int pixels);
 int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLinearRLE16Frame(unsigned short* data, unsigned short* src, int pixels);

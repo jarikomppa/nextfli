@@ -354,6 +354,83 @@ int decode_lz1(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	int ofs = 0;
 	while (ofs < pixels)
 	{
+		int runofs = data[idx++];
+		runofs |= data[idx++] << 8;
+		int runlen = data[idx++];
+		for (int i = 0; i < runlen; i++)
+		{
+			buf[ofs++] = prev[runofs++];
+		}
+		if (ofs < pixels)
+		{
+			int copylen = (signed char)data[idx++];
+			if (copylen >= 0)
+			{
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				unsigned char c = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = c;
+				}
+			}
+		}
+	}
+	if (ofs > pixels) printf("wrote over buffer lz1 %d %d\n", ofs, pixels);
+	return idx;
+}
+
+int decode_lz2(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+{
+	int idx = 0;
+	int ofs = 0;
+	while (ofs < pixels)
+	{
+		int runofs = data[idx++];
+		runofs |= data[idx++] << 8;
+		int runlen = data[idx++];
+		runlen |= data[idx++] << 8;
+		for (int i = 0; i < runlen; i++)
+		{
+			buf[ofs++] = prev[runofs++];
+		}
+		if (ofs < pixels)
+		{
+			int copylen = (signed char)data[idx++];
+			if (copylen >= 0)
+			{
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = data[idx++];
+				}
+			}
+			else
+			{
+				unsigned char c = data[idx++];
+				copylen = -copylen;
+				for (int i = 0; i < copylen; i++)
+				{
+					buf[ofs++] = c;
+				}
+			}
+		}
+	}
+	if (ofs > pixels) printf("wrote over buffer lz2 %d %d\n", ofs, pixels);
+	return idx;
+}
+
+int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+{
+	int idx = 0;
+	int ofs = 0;
+	while (ofs < pixels)
+	{
 		int runlen = (signed char)data[idx++];
 		if (runlen > 0)
 		{
@@ -387,7 +464,7 @@ int decode_lz1(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	return idx;
 }
 
-int decode_lz2(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+int decode_lz2b(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
 {
 	int idx = 0;
 	int ofs = 0;
@@ -514,6 +591,12 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 		break;
 	case LZ2:
 		readbytes = decode_lz2(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		break;
+	case LZ1B:
+		readbytes = decode_lz1b(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		break;
+	case LZ2B:
+		readbytes = decode_lz2b(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
 		break;
 	case LZ3:
 		readbytes = decode_lz3(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);

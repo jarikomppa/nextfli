@@ -46,16 +46,18 @@ int gVerify = 0;
 int gUseBlack = 1;
 int gUseSame = 1;
 int gUseSingle = 1;
-int gUseRLE = 0;
-int gUseDelta8Frame = 0;
-int gUseDelta16Frame = 0;
-int gUseLRLE8 = 0; // ok
-int gUseLRLE16 = 0; // ok
-int gUseLDelta8 = 1; // ?!
-int gUseLDelta16 = 0; // ok
-int gUseLZ1 = 0; // ok
-int gUseLZ2 = 0; // ok
-int gUseLZ3 = 0; // ok
+int gUseRLE = 1;
+int gUseDelta8Frame = 1;
+int gUseDelta16Frame = 1;
+int gUseLRLE8 = 1;
+int gUseLRLE16 = 1;
+int gUseLDelta8 = 1;
+int gUseLDelta16 = 1;
+int gUseLZ1 = 1;
+int gUseLZ2 = 1;
+int gUseLZ1b = 1;
+int gUseLZ2b = 1;
+int gUseLZ3 = 1;
 
 class AddFrameTask : public Thread::PoolTask
 {
@@ -571,6 +573,26 @@ public:
 						}
 					}
 
+					if (gUseLZ1b)
+					{
+						data = new unsigned char[pixels * 2];
+						len = encodeLZ1bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz1b %d +%d\n", len, len - pixels);
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ1B;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
 					if (gUseLZ2)
 					{
 						data = new unsigned char[pixels * 2];
@@ -583,6 +605,26 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ2;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
+					if (gUseLZ2b)
+					{
+						data = new unsigned char[pixels * 2];
+						len = encodeLZ2bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz2b %d +%d\n", len, len - pixels);
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ2B;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -854,9 +896,12 @@ void output_flx(FliHeader& header, FILE* outfile)
 
 	fwrite(&hdr, 1, sizeof(hdr), outfile);
 	Frame* walker = gRoot;
-	int framecounts[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-	int framemaxsize[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-	int frameminsize[16] = { 0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff };
+	int framecounts[24] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+	int framemaxsize[24] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+	int frameminsize[24] = { 
+		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,
+		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,
+		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff };
 	int total = 0;
 	int frames = 0;
 	while (walker)
@@ -871,7 +916,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 		{
 		case SAMEFRAME:chunktype = 0;  printf("s"); break;
 		case BLACKFRAME:chunktype = 13;  printf("b"); break;
-		case RLEFRAME:chunktype = 15; printf("r"); break;
+		case RLEFRAME:chunktype = 15; printf("r[%d]",frames); break;
 		case DELTA8FRAME: chunktype = 12; printf("d"); break;
 		case DELTA16FRAME: chunktype = 7;  printf("D"); break;
 		case FLI_COPY: chunktype = 16; printf("c"); break;
@@ -884,6 +929,8 @@ void output_flx(FliHeader& header, FILE* outfile)
 		case LZ1: chunktype = 106; printf("1"); break;
 		case LZ2: chunktype = 107; printf("2"); break;
 		case LZ3: chunktype = 108; printf("3"); break;
+		case LZ1B: chunktype = 109; printf("4"); break;
+		case LZ2B: chunktype = 110; printf("5"); break;
 		default: printf("?!?\n");
 		}		
 		fputc(walker->mFrameType, outfile);
@@ -917,7 +964,9 @@ void output_flx(FliHeader& header, FILE* outfile)
 	if (framecounts[10]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
 	if (framecounts[11]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
 	if (framecounts[12]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
+	if (framecounts[15]) printf("4 lz scheme 1b  %5d (%5d -%5d bytes)\n", framecounts[15], frameminsize[15], framemaxsize[15]);
 	if (framecounts[13]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+	if (framecounts[16]) printf("5 lz scheme 2b  %5d (%5d -%5d bytes)\n", framecounts[16], frameminsize[16], framemaxsize[16]);
 	if (framecounts[14]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[14], frameminsize[14], framemaxsize[14]);
 
 	header.mSize = ftell(outfile);
