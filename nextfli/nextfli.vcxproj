@@ -142,6 +142,7 @@
     <ClCompile Include="..\ext_blocks.cpp" />
     <ClCompile Include="..\fli_blocks.cpp" />
     <ClCompile Include="..\main.cpp" />
+    <ClCompile Include="..\other_blocks.cpp" />
     <ClCompile Include="..\threadpool.cpp" />
     <ClCompile Include="..\verify.cpp" />
   </ItemGroup>

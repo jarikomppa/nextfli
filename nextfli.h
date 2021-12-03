@@ -135,3 +135,11 @@ int encodeLinearRLE16Frame(unsigned char* data, unsigned char* src, int pixels);
 int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels);
 
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight);
+
+int runlength(unsigned char* data, int max);
+int runlength16(unsigned char* cdata, int max);
+int skiplength(unsigned char* data, unsigned char* prev, int max);
+int skiplength16(unsigned char* cdata, unsigned char* cprev, int max);
+int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs, int max);
+
+

@@ -43,14 +43,14 @@ int gUseDelta8Frame = 1;
 int gUseDelta16Frame = 1;
 
 int gUseLRLE8 = 1;
-int gUseLRLE16 = 0;
+int gUseLRLE16 = 1;
 int gUseLDelta8 = 1;
 int gUseLDelta16 = 0;
 int gUseLZ1 = 0;
 int gUseLZ2 = 0;
 int gUseLZ1b = 1;
 int gUseLZ2b = 0;
-int gUseLZ3 = 1;
+int gUseLZ3 = 0;
 
 class AddFrameTask : public Thread::PoolTask
 {
