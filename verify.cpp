@@ -224,28 +224,23 @@ int decode_linearrle8(unsigned char *buf, unsigned char *data, int datasize, int
 	{
 		int runlen = data[idx++];
 		int rundata = data[idx++];
-		for (int i = 0; i < runlen; i++)
-		{
-			buf[ofs++] = rundata;
-		}
+		memset(buf + ofs, rundata, runlen);
+		ofs += runlen;
 		if (ofs < pixels)
 		{
 			int copylen = (signed char)data[idx++];
 			if (copylen > 0)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = data[idx++];
-				}
+				memcpy(buf + ofs, data + idx, copylen);
+				ofs += copylen;
+				idx += copylen;
 			}
 			else
 			{
 				rundata = data[idx++];
 				copylen = -copylen;
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = rundata;
-				}
+				memset(buf + ofs, rundata, copylen);
+				ofs += copylen;
 			}
 		}
 	}
@@ -259,26 +254,31 @@ int decode_linearrle16(unsigned char* buf, unsigned char* data, int datasize, in
 	int ofs = 0;
 	while (ofs < pixels)
 	{
-		int runlen = data[idx++];
-		runlen |= data[idx++] << 8;
-		int rundata1 = data[idx++];
-		int rundata2 = data[idx++];
-		for (int i = 0; i < runlen; i++)
+		int copylen = (signed char)data[idx++];
+		if (copylen >= 0)
 		{
-			buf[ofs++] = rundata1;
-			buf[ofs++] = rundata2;
+			memcpy(buf + ofs, data + idx, copylen);
+			ofs += copylen;
+			idx += copylen;
 		}
-		if (ofs < pixels)
+		else
 		{
-			int copylen = data[idx++];
-			for (int i = 0; i < copylen; i++)
+			int rundata = data[idx++];
+			if (copylen == -128)
 			{
-				buf[ofs++] = data[idx++];
+				copylen = data[idx++];
+				copylen |= data[idx++] << 8;
 			}
+			else
+			{
+				copylen = -copylen;
+			}
+
+			memset(buf + ofs, rundata, copylen);
+			ofs += copylen;
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer Lrle16 %d %d\n", ofs, pixels);
-	
+	if (ofs > pixels) printf("wrote over buffer Lrle8 %d %d\n", ofs, pixels);
 	return idx;
 }
 
@@ -292,20 +292,14 @@ int decode_lineardelta8(unsigned char* buf, unsigned char *prev, unsigned char* 
 		if (runlen < 0)
 		{
 			runlen = -runlen;
-			for (int i = 0; i < runlen; i++)
-			{
-				buf[ofs] = prev[ofs];
-				ofs++;
-			}
+			memcpy(buf + ofs, prev + ofs, runlen);
+			ofs += runlen;
 		}
 		else
 		{
 			int color = data[idx++];
-			for (int i = 0; i < runlen; i++)
-			{
-				buf[ofs] = color;
-				ofs++;
-			}
+			memset(buf + ofs, color, runlen);
+			ofs += runlen;
 		}
 
 		if (ofs < pixels)
@@ -313,21 +307,15 @@ int decode_lineardelta8(unsigned char* buf, unsigned char *prev, unsigned char* 
 			int copylen = (signed char)data[idx++];
 			if (copylen > 0)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs] = data[idx];
-					ofs++;
-					idx++;
-				}
+				memcpy(buf + ofs, data + idx, copylen);
+				ofs += copylen;
+				idx += copylen;
 			}
 			else
 			{
 				copylen = -copylen;
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs] = prev[ofs];
-					ofs++;
-				}
+				memcpy(buf + ofs, prev + ofs, copylen);
+				ofs += copylen;
 			}
 		}
 	}
@@ -467,19 +455,15 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 		{
 			int runofs = data[idx++];
 			runofs |= data[idx++] << 8;
-			for (int i = 0; i < runlen; i++)
-			{
-				buf[ofs++] = prev[runofs++];
-			}
+			memcpy(buf + ofs, prev + runofs, runlen);
+			ofs += runlen;
 		}
 		else
 		{
 			runlen = -runlen;
 			unsigned char c = data[idx++];
-			for (int i = 0; i < runlen; i++)
-			{
-				buf[ofs++] = c;
-			}
+			memset(buf + ofs, c, runlen);
+			ofs += runlen;
 		}
 
 		if (ofs < pixels)
@@ -487,20 +471,17 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			int copylen = (signed char)data[idx++];
 			if (copylen >= 0)
 			{
-				for (int i = 0; i < copylen; i++)
-				{
-					buf[ofs++] = data[idx++];
-				}
+				memcpy(buf + ofs, data + idx, copylen);
+				ofs += copylen;
+				idx += copylen;
 			}
 			else
 			{
 				int runlen = -copylen;
 				int runofs = data[idx++];
 				runofs |= data[idx++] << 8;
-				for (int i = 0; i < runlen; i++)
-				{
-					buf[ofs++] = prev[runofs++];
-				}
+				memcpy(buf + ofs, prev + runofs, runlen);
+				ofs += runlen;
 			}
 		}
 	}

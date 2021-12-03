@@ -1,7 +1,5 @@
 // TODO
-// - set number of threads
-// - set frame rate
-// - set minimum run length
+// - set minimum / maximum run length
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +32,9 @@ int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
 int gSlowBlocks = 1;
 int gVerify = 0;
+int gFramedelay = 4;
+int gThreads = 0;
+
 
 int gUseBlack = 1;
 int gUseSame = 1;
@@ -149,7 +150,7 @@ void loadframes(FliHeader& header, const char *filemask)
 
 	auto start = std::chrono::steady_clock::now();
 	Thread::Pool threadpool;
-	threadpool.init(24);
+	threadpool.init(gThreads);
 	WIN32_FIND_DATAA FindFileData;
 	HANDLE hFind;
 	hFind = FindFirstFileA(filemask, &FindFileData);
@@ -289,7 +290,7 @@ void quantize(const FliHeader& header)
 	memset(framecolors, 0xff, 512 * sizeof(unsigned int) * header.mFrames);
 	printf("Dithering and reducing..\n");
 	Thread::Pool threadpool;
-	threadpool.init(24);
+	threadpool.init(gThreads);
 
 	Frame* walker = gRoot;
 	unsigned int* cw = framecolors;
@@ -696,7 +697,7 @@ void encode(const FliHeader& header)
 	
 	
 	Thread::Pool threadpool;
-	threadpool.init(24);
+	threadpool.init(gThreads);
 
 	Frame* walker = gRoot;
 	Frame* prev = 0;
@@ -708,8 +709,8 @@ void encode(const FliHeader& header)
 #ifdef NDEBUG
 		threadpool.addWork(t);
 #else
-		threadpool.addWork(t);
-//		t->work();
+		//threadpool.addWork(t);
+		t->work();
 #endif
 		prev = walker;
 		walker = walker->mNext;
@@ -951,7 +952,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE, VERIFY };
+enum optionIndex { UNKNOWN, HELP, FLC, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
@@ -964,6 +965,8 @@ const option::Descriptor usage[] =
 	{ DITHER,       0, "d", "dither", option::Arg::None,         " -d --dither\t Use ordered dither (default: don't)"},
 	{ FASTSCALE,    0, "p", "fastscale", option::Arg::None,      " -p --fastscale\t Use fast image scaling (default: don't)"},
 	{ VERIFY,       0, "v", "verify", option::Arg::None,         " -v --verify\tVerify encoding (default: don't)"},
+	{ THREADS,      0, "t", "threads", option::Arg::Optional,    " -t --threads\tNumber of threads to use (default: num of logical cores)"},
+	{ FRAMEDELAY,   0, "r", "framedelay", option::Arg::Optional, " -r --framedelay\tFrame delay 1=50hz, 2=25hz, 3=16.7hz 4=12.5hz (default: 4)"},
 	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f -d"},
 	{ 0,0,0,0,0,0 }
 };
@@ -1002,6 +1005,10 @@ int main(int parc, char* pars[])
 		gSlowBlocks = 1;
 	}
 
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
+	gThreads = sysinfo.dwNumberOfProcessors;
+
 	if (options[STD]) gClassicBlocks = 1;
 	if (options[EXT]) gExtendedBlocks = 1;
 	if (options[NOSLOW]) gSlowBlocks = 0;
@@ -1009,6 +1016,22 @@ int main(int parc, char* pars[])
 	if (options[DITHER]) gDither = 1;
 	if (options[FASTSCALE]) gPointSample = 1;
 	if (options[VERIFY]) gVerify = 1;
+	if (options[THREADS])
+	{
+		if (options[THREADS].arg != 0 && options[THREADS].arg[0])
+			gThreads = atoi(options[THREADS].arg);
+	}
+	if (options[FRAMEDELAY])
+	{
+		if (options[FRAMEDELAY].arg != 0 && options[FRAMEDELAY].arg[0])
+			gFramedelay = atoi(options[FRAMEDELAY].arg);
+	}
+
+	if (gFramedelay <= 0)
+		gFramedelay = 1;
+
+	if (gThreads < 0)
+		gThreads = 0;
 
 	FILE* outfile;
 	FliHeader header;
@@ -1017,6 +1040,10 @@ int main(int parc, char* pars[])
 	header.mWidth = 256;
 	header.mHeight = 192;
 	header.mFrames = 0;
+
+	printf("Running with %d threads\n", gThreads);
+	printf("Encoding with %d frame delay (%3.3fhz)\n", gFramedelay, 50.0f / gFramedelay);
+	header.mSpeed = (1000 / 50) * gFramedelay;
 
 	loadframes(header, parse.nonOption(1));
 	if (header.mFrames == 0)

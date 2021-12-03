@@ -95,8 +95,8 @@ int encodeLinearRLE16Frame(unsigned char* data, unsigned char* src, int pixels)
 			}
 			else
 			{
-				data[out++] = -128; // value of 0 means run of 0 bytes 
-				data[out++] = src[ofs]; // could skip this on 0, but that hardly ever happens
+				data[out++] = -128; // mark as "long run"
+				data[out++] = src[ofs]; 
 				data[out++] = l & 0xff;
 				data[out++] = (l >> 8) & 0xff;
 			}
