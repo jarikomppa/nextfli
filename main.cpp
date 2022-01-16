@@ -24,6 +24,8 @@
 
 #include <windows.h> // findfirst
 
+#include "gif.h"
+
 Frame* gRoot = NULL, * gLast = NULL;
 int gHalfRes = 0;
 int gPointSample = 0;
@@ -134,10 +136,12 @@ void addFrame(char* fn, const FliHeader& header, Thread::Pool &threadpool)
 	{
 		gRoot = fr;
 		gLast = fr;
-		return;
 	}
-	gLast->mNext = fr;
-	gLast = fr;
+	else
+	{
+		gLast->mNext = fr;
+		gLast = fr;
+	}
 
 	AddFrameTask* t = new AddFrameTask(fn, fr, header);
 	t->mDeleteTask = 1;
@@ -836,6 +840,27 @@ void output_flc(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
+void output_gif(FliHeader& header, const char*fn)
+{
+	printf("Writing file..\n");
+	auto start = std::chrono::steady_clock::now();
+	GifWriter gw;
+	GifBegin(&gw, fn, 256, 192, 2 * gFramedelay);
+	Frame* walker = gRoot;
+	while (walker)
+	{
+		int frame[256 * 192];
+		for (int i = 0; i < 256 * 192; i++)
+			frame[i] = walker->mPalette[walker->mIndexPixels[i]];
+		GifWriteFrame(&gw, (const unsigned char*)frame, 256, 192, 2 * gFramedelay);
+		walker = walker->mNext;
+	}
+	GifEnd(&gw);
+	auto end = std::chrono::steady_clock::now();
+	std::chrono::duration<double> elapsed_seconds = end - start;
+	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
+}
+
 
 void output_flx(FliHeader& header, FILE* outfile)
 {
@@ -853,14 +878,14 @@ void output_flx(FliHeader& header, FILE* outfile)
 #pragma pack(pop)
 	memset(&hdr, 0, sizeof(hdr));
 	hdr.tag = 'LFXN'; // reverses to 'NXFL'
-	hdr.tag = header.mFrames;
-	hdr.speed = header.mSpeed;
+	hdr.frames = header.mFrames;
+	hdr.speed = gFramedelay;
 	for (int i = 0; i < 256; i++)
 	{
 		int c;
 		c = ((gRoot->mPalette[i] >> 16) & 0xe0) << 1;
 		c |= ((gRoot->mPalette[i] >> 8) & 0xe0) >> 2;
-		c |= ((gRoot->mPalette[0] >> 0) & 0xe0) >> 5;
+		c |= ((gRoot->mPalette[i] >> 0) & 0xe0) >> 5;
 
 		hdr.pal[i * 2 + 0] = c >> 1;
 		hdr.pal[i * 2 + 1] = c & 1;
@@ -941,23 +966,24 @@ void output_flx(FliHeader& header, FILE* outfile)
 	if (framecounts[15]) printf("5 lz scheme 2b  %5d (%5d -%5d bytes)\n", framecounts[15], frameminsize[15], framemaxsize[15]);
 	if (framecounts[16]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[16], frameminsize[16], framemaxsize[16]);
 
-	header.mSize = ftell(outfile);
-	header.mFrames = frames;
+	hdr.frames = frames;
 
 	fseek(outfile, 0, SEEK_SET);
-	fwrite(&header, 1, sizeof(FliHeader), outfile); // finished header
+	fwrite(&hdr, 1, sizeof(hdr), outfile); // finished header
 
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
 	{ HELP,			0, "h", "help", option::Arg::None,			 " -h --help\t Print usage and exit"},
 	{ FLC,			0, "f", "flc", option::Arg::None,			 " -f --flc\t Output standard FLC format (default: use flx)"},
+	{ FLX,			0, "x", "flx", option::Arg::None,			 " -x --flx\t Output nextfli FLX format (default: use flx)"},
+	{ GIF,			0, "g", "gif", option::Arg::None,			 " -g --gif\t Output GIF format (default: use flx)"},
 	{ STD,			0, "s", "std", option::Arg::None,			 " -s --std\t Use standard blocks (default: flc yes, flx no)"},
 	{ EXT,			0, "e", "ext", option::Arg::None,			 " -e --ext\t Use extended blocks (default: flc no, fli yes)"},
 	{ NOSLOW,		0, "n", "noslow", option::Arg::None,		 " -n --noslow\t Don't use slow-to-encode blocks (default: yes)"},
@@ -992,7 +1018,12 @@ int main(int parc, char* pars[])
 		option::printUsage(std::cout, usage);
 		return 0;
 	}
-
+	if (options[GIF])
+	{
+		gClassicBlocks = 0;
+		gExtendedBlocks = 0;
+	}
+	else
 	if (options[FLC])
 	{
 		gClassicBlocks = 1;
@@ -1060,6 +1091,13 @@ int main(int parc, char* pars[])
 		printf("file open failed\n");
 		return 0;
 	}
+	if (options[GIF])
+	{
+		fclose(outfile);
+		outfile = 0;
+		output_gif(header, parse.nonOption(0));
+	}
+	else
 	if (options[FLC])
 	{
 		output_flc(header, outfile);
