@@ -263,7 +263,6 @@ int decode_linearrle16(unsigned char* buf, unsigned char* data, int datasize, in
 		}
 		else
 		{
-			int rundata = data[idx++];
 			if (copylen == -128)
 			{
 				copylen = data[idx++];
@@ -273,6 +272,7 @@ int decode_linearrle16(unsigned char* buf, unsigned char* data, int datasize, in
 			{
 				copylen = -copylen;
 			}
+			int rundata = data[idx++];
 
 			memset(buf + ofs, rundata, copylen);
 			ofs += copylen;
