@@ -16,7 +16,11 @@ enum FRAMETYPE
 	LZ1B = 13,
 	LZ2 = 14,
 	LZ2B = 15,
-	LZ3 = 16
+	LZ3 = 16,
+	LZ4 = 17,
+	LZ5 = 18,
+	LZ6 = 19,
+	FRAMETYPE_MAX
 }; 
 
 // FLI header
@@ -113,10 +117,14 @@ struct Frame
 
 	Frame* mNext;
 
+	int mFrameSize[FRAMETYPE_MAX];
+
 	Frame() : mFrameType(0), mFrameData(0), mFrameDataSize(0), mPaletteChanged(0), mRgbPixels(0), mIndexPixels(0), mNext(0)
 	{
 		for (int i = 0; i < 256; i++)
 			mPalette[i] = 0;
+		for (int i = 0; i < FRAMETYPE_MAX; i++)
+			mFrameSize[i] = 0;
 	}
 };
 
@@ -133,6 +141,9 @@ int encodeLinearDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigne
 int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLinearRLE16Frame(unsigned char* data, unsigned char* src, int pixels);
 int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels);
+int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, int pixels);
+int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight);
 

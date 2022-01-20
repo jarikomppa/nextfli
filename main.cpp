@@ -1,5 +1,6 @@
 // TODO
 // - set minimum / maximum run length
+// - different graphics modes support
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +34,7 @@ int gDither = 0;
 int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
 int gSlowBlocks = 1;
+int gAggressive = 0;
 int gVerify = 0;
 int gFramedelay = 4;
 int gThreads = 0;
@@ -45,15 +47,20 @@ int gUseRLE = 1;
 int gUseDelta8Frame = 1;
 int gUseDelta16Frame = 1;
 
-int gUseLRLE8 = 1;
-int gUseLRLE16 = 1;
-int gUseLDelta8 = 1;
+
+int gUseLRLE8 = 0;
+int gUseLRLE16 = 0;
+int gUseLDelta8 = 0;
 int gUseLDelta16 = 0;
 int gUseLZ1 = 0;
 int gUseLZ2 = 0;
 int gUseLZ1b = 1;
 int gUseLZ2b = 0;
-int gUseLZ3 = 0;
+int gUseLZ3 = 1;
+int gUseLZ4 = 1;
+int gUseLZ5 = 1;
+int gUseLZ6 = 1;
+
 
 class AddFrameTask : public Thread::PoolTask
 {
@@ -66,7 +73,7 @@ public:
 	{
 		fn = _strdup(aFn);
 	}
-	
+
 	virtual ~AddFrameTask()
 	{
 		free(fn);
@@ -118,7 +125,7 @@ public:
 		}
 		else
 		{
-			stbir_resize_uint8((const unsigned char*)data, x, y, x*4,
+			stbir_resize_uint8((const unsigned char*)data, x, y, x * 4,
 				(unsigned char*)fr->mRgbPixels + header.mWidth * 4 * yofs + xofs * 4, wd, ht, header.mWidth * 4,
 				4);
 		}
@@ -126,7 +133,7 @@ public:
 	}
 };
 
-void addFrame(char* fn, const FliHeader& header, Thread::Pool &threadpool)
+void addFrame(char* fn, const FliHeader& header, Thread::Pool& threadpool)
 {
 	Frame* fr = new Frame;
 	fr->mRgbPixels = new unsigned int[header.mHeight * header.mWidth];
@@ -148,9 +155,9 @@ void addFrame(char* fn, const FliHeader& header, Thread::Pool &threadpool)
 	threadpool.addWork(t);
 }
 
-void loadframes(FliHeader& header, const char *filemask)
+void loadframes(FliHeader& header, const char* filemask)
 {
-	printf("Loading frames using filemask \"%s\"\n", filemask);	
+	printf("Loading frames using filemask \"%s\"\n", filemask);
 
 	auto start = std::chrono::steady_clock::now();
 	Thread::Pool threadpool;
@@ -165,23 +172,22 @@ void loadframes(FliHeader& header, const char *filemask)
 			char temp[512];
 			if (strrchr(filemask, '\\') != 0)
 			{
-				*(char*)(strrchr(filemask, '\\')+1) = 0;
+				*(char*)(strrchr(filemask, '\\') + 1) = 0;
 				sprintf(temp, "%s%s", filemask, FindFileData.cFileName);
 			}
 			else
-			if (strrchr(filemask, '/') != 0)
-			{
-				*(char*)(strrchr(filemask, '/')+1) = 0;
-				sprintf(temp, "%s%s", filemask, FindFileData.cFileName);
-			}
-			else
-				sprintf(temp, "%s", FindFileData.cFileName);
+				if (strrchr(filemask, '/') != 0)
+				{
+					*(char*)(strrchr(filemask, '/') + 1) = 0;
+					sprintf(temp, "%s%s", filemask, FindFileData.cFileName);
+				}
+				else
+					sprintf(temp, "%s", FindFileData.cFileName);
 			printf("Loading %s                    \r", temp);
 			addFrame(temp, header, threadpool);
 			header.mFrames++;
-		} 
-		while (FindNextFileA(hFind, &FindFileData));
-		
+		} while (FindNextFileA(hFind, &FindFileData));
+
 		FindClose(hFind);
 	}
 	printf("\nWaiting for threads..\n");
@@ -209,7 +215,7 @@ The following is the above /63.0f-0.5f)/8.0f
 
 float dithermatrix8x8[] =
 {
-	-0.062500f,  0.000992f, -0.046627f,  0.016865f, -0.058532f,  0.004960f, -0.042659f,  0.020833f, 
+	-0.062500f,  0.000992f, -0.046627f,  0.016865f, -0.058532f,  0.004960f, -0.042659f,  0.020833f,
 	 0.032738f, -0.030754f,  0.048611f, -0.014881f,  0.036706f, -0.026786f,  0.052579f, -0.010913f,
 	-0.038690f,  0.024802f, -0.054563f,  0.008929f, -0.034722f,  0.028770f, -0.050595f,  0.012897f,
 	 0.056548f, -0.006944f,  0.040675f, -0.022817f,  0.060516f, -0.002976f,  0.044643f, -0.018849f,
@@ -225,7 +231,7 @@ public:
 	Frame* mFrame;
 	const FliHeader& mHeader;
 	unsigned int* colors;
-	QuantizeTask(Frame* aFrame, const FliHeader& aHeader, unsigned int *aColors) : mFrame(aFrame), mHeader(aHeader), colors(aColors)
+	QuantizeTask(Frame* aFrame, const FliHeader& aHeader, unsigned int* aColors) : mFrame(aFrame), mHeader(aHeader), colors(aColors)
 	{}
 
 	virtual ~QuantizeTask()
@@ -289,7 +295,7 @@ public:
 void quantize(const FliHeader& header)
 {
 	auto start = std::chrono::steady_clock::now();
-	unsigned int *framecolors;
+	unsigned int* framecolors;
 	framecolors = new unsigned int[512 * header.mFrames];
 	memset(framecolors, 0xff, 512 * sizeof(unsigned int) * header.mFrames);
 	printf("Dithering and reducing..\n");
@@ -324,7 +330,7 @@ void quantize(const FliHeader& header)
 			cc++;
 		else
 			colors[i] = 0;
-	printf("%d unique colors\n", cc + 1);
+	printf("%d unique colors\n", cc);
 
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;
@@ -334,7 +340,7 @@ void quantize(const FliHeader& header)
 
 	printf("Quantizing and remapping..\n");
 
-	SQ* q = sq_alloc();	
+	SQ* q = sq_alloc();
 	sq_addcolormap(q, (unsigned char*)&colors, 512, 4);
 	unsigned char* idxmap;
 	unsigned char* pal;
@@ -390,6 +396,7 @@ public:
 			mFrame->mFrameType = BLACKFRAME;
 			mFrame->mFrameData = 0;
 			mFrame->mFrameDataSize = 0;
+			mFrame->mFrameSize[mFrame->mFrameType] = mFrame->mFrameDataSize;
 			if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 			return;
 		}
@@ -405,11 +412,12 @@ public:
 				mFrame->mFrameType = SAMEFRAME;
 				mFrame->mFrameData = 0;
 				mFrame->mFrameDataSize = 0;
+				mFrame->mFrameSize[mFrame->mFrameType] = mFrame->mFrameDataSize;
 				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
 		}
-		
+
 		if (gExtendedBlocks && gUseSingle)
 		{
 			int allsingle = 1;
@@ -421,6 +429,7 @@ public:
 				mFrame->mFrameData = new unsigned char[1];
 				mFrame->mFrameDataSize = 1;
 				mFrame->mFrameData[0] = mFrame->mIndexPixels[0];
+				mFrame->mFrameSize[mFrame->mFrameType] = mFrame->mFrameDataSize;
 				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
@@ -443,6 +452,7 @@ public:
 			{
 				data = new unsigned char[pixels * 2];
 				len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+				mFrame->mFrameSize[RLEFRAME] = len;
 				if (gVerify) if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
 				if (len < mFrame->mFrameDataSize)
 				{
@@ -461,11 +471,12 @@ public:
 
 		if (gExtendedBlocks)
 		{
-			if (gUseLRLE8)
+			if (gUseLRLE8 && gAggressive)
 			{
 				data = new unsigned char[pixels * 2];
 				len = encodeLinearRLE8Frame(data, mFrame->mIndexPixels, pixels);
 				if (gVerify) if (len > pixels) printf("overlong Lrle8 %d +%d\n", len, len - pixels);
+				mFrame->mFrameSize[LINEARRLE8] = len;
 				if (len < mFrame->mFrameDataSize)
 				{
 					delete[] mFrame->mFrameData;
@@ -480,11 +491,12 @@ public:
 				}
 			}
 
-			if (gUseLRLE16)
+			if (gUseLRLE16 && gAggressive)
 			{
 				data = new unsigned char[pixels * 2];
 				len = encodeLinearRLE16Frame(data, (mFrame->mIndexPixels), pixels);
 				if (gVerify) if (len > pixels) printf("overlong Lrle16 %d +%d\n", len, len - pixels);
+				mFrame->mFrameSize[LINEARRLE16] = len;
 				if (len < mFrame->mFrameDataSize)
 				{
 					delete[] mFrame->mFrameData;
@@ -500,15 +512,43 @@ public:
 			}
 		}
 
+		if (gExtendedBlocks)
+		{
+			if (gSlowBlocks)
+			{
+				if (gUseLZ4) // only LZ block that doesn't need previous frames
+				{
+					data = new unsigned char[pixels * 2];
+					len = encodeLZ4Frame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+					if (gVerify) if (len > pixels) printf("overlong Lz4 %d +%d\n", len, len - pixels);
+					mFrame->mFrameSize[LZ4] = len;
+
+					if (len < mFrame->mFrameDataSize)
+					{
+						delete[] mFrame->mFrameData;
+						mFrame->mFrameData = data;
+						mFrame->mFrameDataSize = len;
+						mFrame->mFrameType = LZ4;
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					}
+					else
+					{
+						delete[] data;
+					}
+				}
+			}
+		}
+
 		if (mPrev)
 		{
 			if (gExtendedBlocks)
 			{
-				if (gUseLDelta8)
+				if (gUseLDelta8 && gAggressive)
 				{
 					data = new unsigned char[pixels * 2];
 					len = encodeLinearDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Ldelta8 %d +%d\n", len, len - pixels);
+					mFrame->mFrameSize[LINEARDELTA8] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -524,11 +564,12 @@ public:
 					}
 				}
 
-				if (gUseLDelta16)
+				if (gUseLDelta16 && gAggressive)
 				{
 					data = new unsigned char[pixels * 2];
 					len = encodeLinearDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Ldelta16 %d +%d\n", len, len - pixels);
+					mFrame->mFrameSize[LINEARDELTA16] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -546,11 +587,12 @@ public:
 
 				if (gSlowBlocks)
 				{
-					if (gUseLZ1)
+					if (gUseLZ1 && gAggressive)
 					{
 						data = new unsigned char[pixels * 2];
 						len = encodeLZ1Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz1 %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ1] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -566,11 +608,12 @@ public:
 						}
 					}
 
-					if (gUseLZ1b)
+					if (gUseLZ1b && gAggressive)
 					{
 						data = new unsigned char[pixels * 2];
 						len = encodeLZ1bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz1b %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ1B] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -586,11 +629,12 @@ public:
 						}
 					}
 
-					if (gUseLZ2)
+					if (gUseLZ2 && gAggressive)
 					{
 						data = new unsigned char[pixels * 2];
 						len = encodeLZ2Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ2] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -606,11 +650,12 @@ public:
 						}
 					}
 
-					if (gUseLZ2b)
+					if (gUseLZ2b && gAggressive)
 					{
 						data = new unsigned char[pixels * 2];
 						len = encodeLZ2bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz2b %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ2B] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -625,6 +670,49 @@ public:
 							delete[] data;
 						}
 					}
+
+					if (gUseLZ5)
+					{
+						data = new unsigned char[pixels * 2];
+						len = encodeLZ5Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz5 %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ5] = len;
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ5;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
+					if (gUseLZ6 && gAggressive)
+					{
+						data = new unsigned char[pixels * 2];
+						len = encodeLZ6Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz6 %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ6] = len;
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ6;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
 				}
 
 				if (gUseLZ3)
@@ -632,6 +720,7 @@ public:
 					data = new unsigned char[pixels * 2];
 					len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
+					mFrame->mFrameSize[LZ3] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -647,7 +736,7 @@ public:
 					}
 				}
 			}
-		
+
 			if (gClassicBlocks)
 			{
 				if (gUseDelta8Frame)
@@ -655,6 +744,7 @@ public:
 					data = new unsigned char[pixels * 2];
 					len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
+					mFrame->mFrameSize[DELTA8FRAME] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -675,6 +765,7 @@ public:
 					data = new unsigned char[pixels * 2];
 					len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
+					mFrame->mFrameSize[DELTA16FRAME] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -698,8 +789,8 @@ void encode(const FliHeader& header)
 {
 	printf("Encoding..\n");
 	auto start = std::chrono::steady_clock::now();
-	
-	
+
+
 	Thread::Pool threadpool;
 	threadpool.init(gThreads);
 
@@ -719,8 +810,9 @@ void encode(const FliHeader& header)
 		prev = walker;
 		walker = walker->mNext;
 		fr++;
-		printf("%d%% tasks started \r", fr * 100 / header.mFrames);
+		printf("\r%d%% tasks started ", fr * 100 / header.mFrames);
 	}
+	printf("\r");
 
 	printf("Waiting for threads..\n");
 	threadpool.waitUntilDone(100, true);
@@ -740,7 +832,7 @@ void writechunk(FILE* outfile, Frame* frame, int tag, int frameno)
 		unsigned short tag;
 		unsigned short chunks;
 		unsigned short reserved[4];
-	} hdr;	
+	} hdr;
 
 	struct chunkhdr
 	{
@@ -826,7 +918,7 @@ void output_flc(FliHeader& header, FILE* outfile)
 		walker = walker->mNext;
 		frames++;
 	}
-	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total/1024, total/(1024*1024), ftell(outfile)-total);
+	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total / 1024, total / (1024 * 1024), ftell(outfile) - total);
 	printf("Compression ratio %3.3f%%, %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), total / frames);
 
 	header.mSize = ftell(outfile);
@@ -840,7 +932,7 @@ void output_flc(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-void output_gif(FliHeader& header, const char*fn)
+void output_gif(FliHeader& header, const char* fn)
 {
 	printf("Writing file..\n");
 	auto start = std::chrono::steady_clock::now();
@@ -895,7 +987,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	Frame* walker = gRoot;
 	int framecounts[24] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 	int framemaxsize[24] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-	int frameminsize[24] = { 
+	int frameminsize[24] = {
 		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,
 		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,
 		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff };
@@ -926,10 +1018,13 @@ void output_flx(FliHeader& header, FILE* outfile)
 		case LZ1: chunktype = 106; printf("1"); break;
 		case LZ2: chunktype = 107; printf("2"); break;
 		case LZ3: chunktype = 108; printf("3"); break;
-		case LZ1B: chunktype = 109; printf("4"); break;
-		case LZ2B: chunktype = 110; printf("5"); break;
+		case LZ1B: chunktype = 109; printf("9"); break;
+		case LZ2B: chunktype = 110; printf("0"); break;
+		case LZ4: chunktype = 111; printf("4"); break;
+		case LZ5: chunktype = 112; printf("5"); break;
+		case LZ6: chunktype = 113; printf("6"); break;
 		default: printf("?!?\n");
-		}		
+		}
 		fputc(walker->mFrameType, outfile);
 		unsigned short ds = walker->mFrameDataSize;
 		fwrite(&ds, 1, 2, outfile);
@@ -937,7 +1032,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 		{
 			fwrite(walker->mFrameData, 1, walker->mFrameDataSize, outfile);
 		}
-		
+
 		if (walker->mFrameDataSize > framemaxsize[walker->mFrameType]) framemaxsize[walker->mFrameType] = walker->mFrameDataSize;
 		if (walker->mFrameDataSize < frameminsize[walker->mFrameType]) frameminsize[walker->mFrameType] = walker->mFrameDataSize;
 		framecounts[walker->mFrameType]++;
@@ -961,10 +1056,13 @@ void output_flx(FliHeader& header, FILE* outfile)
 	if (framecounts[10]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
 	if (framecounts[11]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
 	if (framecounts[12]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
-	if (framecounts[13]) printf("4 lz scheme 1b  %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+	if (framecounts[13]) printf("9 lz scheme 1b  %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
 	if (framecounts[14]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[14], frameminsize[14], framemaxsize[14]);
-	if (framecounts[15]) printf("5 lz scheme 2b  %5d (%5d -%5d bytes)\n", framecounts[15], frameminsize[15], framemaxsize[15]);
+	if (framecounts[15]) printf("0 lz scheme 2b  %5d (%5d -%5d bytes)\n", framecounts[15], frameminsize[15], framemaxsize[15]);
 	if (framecounts[16]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[16], frameminsize[16], framemaxsize[16]);
+	if (framecounts[17]) printf("4 lz scheme 4   %5d (%5d -%5d bytes)\n", framecounts[17], frameminsize[17], framemaxsize[17]);
+	if (framecounts[18]) printf("5 lz scheme 5   %5d (%5d -%5d bytes)\n", framecounts[18], frameminsize[18], framemaxsize[18]);
+	if (framecounts[19]) printf("6 lz scheme 6   %5d (%5d -%5d bytes)\n", framecounts[19], frameminsize[19], framemaxsize[19]);
 
 	hdr.frames = frames;
 
@@ -976,7 +1074,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, NOSLOW, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, AGGRO };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
@@ -986,14 +1084,15 @@ const option::Descriptor usage[] =
 	{ GIF,			0, "g", "gif", option::Arg::None,			 " -g --gif\t Output GIF format (default: use flx)"},
 	{ STD,			0, "s", "std", option::Arg::None,			 " -s --std\t Use standard blocks (default: flc yes, flx no)"},
 	{ EXT,			0, "e", "ext", option::Arg::None,			 " -e --ext\t Use extended blocks (default: flc no, fli yes)"},
-	{ NOSLOW,		0, "n", "noslow", option::Arg::None,		 " -n --noslow\t Don't use slow-to-encode blocks (default: yes)"},
+	{ AGGRO,		0, "X", "aggressive", option::Arg::None,	 " -X --aggressive\t Compress better (default: don't)"},
 	{ HALFRES,      0, "l", "halfres", option::Arg::None,        " -l --halfres\t Reduce output resolution to half x, half y (default: don't)"},
 	{ DITHER,       0, "d", "dither", option::Arg::None,         " -d --dither\t Use ordered dither (default: don't)"},
 	{ FASTSCALE,    0, "p", "fastscale", option::Arg::None,      " -p --fastscale\t Use fast image scaling (default: don't)"},
 	{ VERIFY,       0, "v", "verify", option::Arg::None,         " -v --verify\tVerify encoding (default: don't)"},
 	{ THREADS,      0, "t", "threads", option::Arg::Optional,    " -t --threads\tNumber of threads to use (default: num of logical cores)"},
 	{ FRAMEDELAY,   0, "r", "framedelay", option::Arg::Optional, " -r --framedelay\tFrame delay 1=50hz, 2=25hz, 3=16.7hz 4=12.5hz (default: 4)"},
-	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f -d"},
+	{ INFO,         0, "i", "info", option::Arg::Optional,       " -i --info\t Output frame info log to file (default: don't)"},
+	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
 };
 
@@ -1024,17 +1123,17 @@ int main(int parc, char* pars[])
 		gExtendedBlocks = 0;
 	}
 	else
-	if (options[FLC])
-	{
-		gClassicBlocks = 1;
-		gExtendedBlocks = 0;
-	}
-	else
-	{
-		gClassicBlocks = 0;
-		gExtendedBlocks = 1;
-		gSlowBlocks = 1;
-	}
+		if (options[FLC])
+		{
+			gClassicBlocks = 1;
+			gExtendedBlocks = 0;
+		}
+		else
+		{
+			gClassicBlocks = 0;
+			gExtendedBlocks = 1;
+			gSlowBlocks = 1;
+		}
 
 	SYSTEM_INFO sysinfo;
 	GetSystemInfo(&sysinfo);
@@ -1042,7 +1141,7 @@ int main(int parc, char* pars[])
 
 	if (options[STD]) gClassicBlocks = 1;
 	if (options[EXT]) gExtendedBlocks = 1;
-	if (options[NOSLOW]) gSlowBlocks = 0;
+	if (options[AGGRO]) gAggressive = 1;
 	if (options[HALFRES]) gHalfRes = 1;
 	if (options[DITHER]) gDither = 1;
 	if (options[FASTSCALE]) gPointSample = 1;
@@ -1051,12 +1150,31 @@ int main(int parc, char* pars[])
 	{
 		if (options[THREADS].arg != 0 && options[THREADS].arg[0])
 			gThreads = atoi(options[THREADS].arg);
+		else
+		{
+			printf("Invalid threads. Example: -t7\n");
+			return 0;
+		}
 	}
 	if (options[FRAMEDELAY])
 	{
 		if (options[FRAMEDELAY].arg != 0 && options[FRAMEDELAY].arg[0])
 			gFramedelay = atoi(options[FRAMEDELAY].arg);
+		else
+		{
+			printf("Invalid framedelay. Example: -f3\n");
+			return 0;
+		}
 	}
+	if (options[INFO])
+	{
+		if (options[INFO].arg == 0 || !options[INFO].arg[0])
+		{
+			printf("Invalid infolog. Example: -iinfolog.txt\n");
+			return 0;
+		}
+	}
+
 
 	if (gFramedelay <= 0)
 		gFramedelay = 1;
@@ -1098,15 +1216,32 @@ int main(int parc, char* pars[])
 		output_gif(header, parse.nonOption(0));
 	}
 	else
-	if (options[FLC])
+		if (options[FLC])
+		{
+			output_flc(header, outfile);
+		}
+		else
+		{
+			output_flx(header, outfile);
+		}
+	if (outfile) fclose(outfile);
+
+	if (options[INFO])
 	{
-		output_flc(header, outfile);
+		FILE* f = fopen(options[INFO].arg, "w");
+		Frame* walker = gRoot;
+		while (walker)
+		{
+			fprintf(f, "%d, %d", walker->mFrameType, walker->mFrameDataSize);
+			for (int i = 0; i < FRAMETYPE_MAX; i++)
+				fprintf(f, ", %d", walker->mFrameSize[i]);
+			fprintf(f, "\n");
+			walker = walker->mNext;
+		}
+		fclose(f);
+		printf("Frame info log written to %s\n", options[INFO].arg);
 	}
-	else
-	{
-		output_flx(header, outfile);
-	}
-	fclose(outfile);
+
 
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;

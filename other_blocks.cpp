@@ -1,54 +1,6 @@
 #include "nextfli.h"
 
 
-int encodeLinearDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels)
-{
-	int ofs = 0;
-	int out = 0;
-	while (ofs < pixels)
-	{
-		// skip
-		int ls = skiplength16(aFrame + ofs, aPrev + ofs, ofs + 65536 > pixels ? pixels - ofs : 65536);
-		int lr = runlength16(aFrame + ofs, ofs + 65534 > pixels ? pixels - ofs : 65534);
-		if (lr > ls)
-		{
-			data[out++] = (lr / 2);
-			data[out++] = (lr / 2) >> 8;
-			data[out++] = aFrame[ofs];
-			data[out++] = aFrame[ofs + 1];
-			ofs += lr;
-		}
-		else
-		{
-			data[out++] = (-ls / 2) & 0xff;
-			data[out++] = ((-ls / 2) >> 8) & 0xff;
-			ofs += ls;
-		}
-
-		if (ofs < pixels)
-		{
-			// copy
-			// one skip + copy segment costs at least 6 bytes, so skip until at least 6 byte run is found
-			int l = 0;
-			while (l < 255 && ofs + l + 6 < pixels &&
-				skiplength16(aFrame + ofs + l, aPrev + ofs + l, 6) < 6 &&
-				runlength16((unsigned char*)aFrame + ofs + l, 6) < 6)
-				l += 2;
-
-			if (ofs + l + 6 >= pixels)
-				l = pixels - ofs;
-			data[out++] = l;
-
-			for (int i = 0; i < l; i++)
-			{
-				data[out++] = aFrame[ofs];
-				ofs++;
-			}
-		}
-	}
-	return out;
-}
-
 
 int bestLZRun1(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs)
 {
@@ -321,20 +273,20 @@ int encodeLZ3Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 
 		if (ofs < pixels)
 		{
-			// lz/copy
-			// one run + skip segment costs at least 4 bytes, so skip until at least 4 byte run is found			
-			int lc = 0;
-			while (lc < 128 && ofs + lc + 4 < pixels &&
-				bestLZRun3(aFrame, aPrev, ofs + lc, pixels, o, 4) < 4 &&
-				runlength(aFrame + ofs + lc, 4) < 4)
-				lc++;
-			if (ofs + lc + 4 > pixels)
-				lc = pixels - ofs;
-			if (lc > 255) lc = 255;
 			int lz = bestLZRun3(aFrame, aPrev, ofs, pixels, o, ofs + 127 > pixels ? pixels - ofs : 127);
 
 			if (lz < 4)
 			{
+				// lz/copy
+				// one run + skip segment costs at least 4 bytes, so skip until at least 4 byte run is found			
+				int lc = 0;
+				while (lc < 128 && ofs + lc + 4 < pixels &&
+					bestLZRun3(aFrame, aPrev, ofs + lc, pixels, o, 4) < 4 &&
+					runlength(aFrame + ofs + lc, 4) < 4)
+					lc++;
+				if (ofs + lc + 4 > pixels)
+					lc = pixels - ofs;
+				
 				data[out++] = -lc;
 				for (int i = 0; i < lc; i++)
 				{
