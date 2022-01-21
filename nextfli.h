@@ -20,6 +20,10 @@ enum FRAMETYPE
 	LZ4 = 17,
 	LZ5 = 18,
 	LZ6 = 19,
+	LZ3B = 20,
+	LZ3C = 21,
+	LZ3D = 22,
+	LZ3E = 23,
 	FRAMETYPE_MAX
 }; 
 
@@ -145,6 +149,11 @@ int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, int pixels);
 int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 
+int encodeLZ3BFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ3DFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ3EFrame(unsigned char* data, unsigned char* aFrame, int pixels);
+
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight);
 
 int runlength(unsigned char* data, int max);
@@ -152,5 +161,5 @@ int runlength16(unsigned char* cdata, int max);
 int skiplength(unsigned char* data, unsigned char* prev, int max);
 int skiplength16(unsigned char* cdata, unsigned char* cprev, int max);
 int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs, int max);
-
+int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, signed char& runofs, int max);
 

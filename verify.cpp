@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include "nextfli.h"
+
 
 int decode_rleframe(unsigned char *buf, unsigned char *data, int datalen, int aWidth, int aHeight)
 {
@@ -673,6 +675,12 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 
 int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
 {
+	/*
+; op <=0 [-op][runvalue] or [-128][2 byte size][runvalue] - RLE
+; op > 0 [op][2 byte offset] or [127][2 byte size][2 byte offset] - Copy from previous frame
+; op < 0 [-op][2 byte offset] or [-128][2 byte size][2 byte offset] - Copy from current frame
+; op >=0 [op][literal bytes] or [127][2 byte size][literal bytes] - Copy literal values
+*/
 	int idx = 0;
 	int ofs = 0;
 	while (ofs < pixels)
@@ -712,6 +720,11 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			int copylen = (signed char)data[idx++];
 			if (copylen >= 0)
 			{
+				if (copylen == 127)
+				{
+					copylen = data[idx++];
+					copylen |= data[idx++];
+				}
 				memcpy(buf + ofs, data + idx, copylen);
 				ofs += copylen;
 				idx += copylen;
@@ -740,6 +753,12 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 
 int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
 {
+	/*
+; op <=0 [-op][runvalue] or [-128][2 byte size][runvalue] - RLE
+; op > 0 [op][2 byte offset] or [127][2 byte size][2 byte offset] - Copy from previous frame
+; op < 0 [-op][2 byte offset] or [-128][2 byte size][2 byte offset] - Copy from current frame
+; op >=0 [op][literal bytes] or [127][2 byte size][literal bytes] - Copy literal values
+	*/
 	int idx = 0;
 	int ofs = 0;
 	while (ofs < pixels)
@@ -779,6 +798,11 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			int copylen = (signed char)data[idx++];
 			if (copylen >= 0)
 			{
+				if (copylen == 127)
+				{
+					copylen = data[idx++];
+					copylen |= data[idx++] << 8; 
+				}
 				memcpy(buf + ofs, data + idx, copylen);
 				ofs += copylen;
 				idx += copylen;
@@ -805,6 +829,82 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	return idx;
 }
 
+int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+{
+	/*
+; op >  0 [127][2 byte len] or [op][current ofs +/- signed byte] copy from previous
+; op <= 0 [-128][2 byte len] or [-op][run byte]
+; op >  0 [127][2 byte len] or [op][current ofs +/- signed byte] copy from previous
+; op <= 0 [-128][2 byte len] or [-op][.. bytes ..]
+	*/
+	int idx = 0;
+	int ofs = 0;
+	while (ofs < pixels)
+	{
+		int runlen = (signed char)data[idx++];
+		if (runlen > 0)
+		{
+			if (runlen == 127)
+			{
+				runlen = data[idx++];
+				runlen += data[idx++] << 8;
+			}
+			int runofs = ofs + (signed char)data[idx++];
+			mymemcpy(buf + ofs, prev + runofs, runlen);
+
+			ofs += runlen;
+		}
+		else
+		{
+			if (runlen == -128)
+			{
+				runlen = data[idx++];
+				runlen += data[idx++] << 8;
+			}
+			else
+			{
+				runlen = -runlen;
+			}
+			unsigned char c = data[idx++];
+			memset(buf + ofs, c, runlen);
+			ofs += runlen;
+		}
+
+		if (ofs < pixels)
+		{
+			int runlen = (signed char)data[idx++];
+			if (runlen > 0)
+			{
+				if (runlen == 127)
+				{
+					runlen = data[idx++];
+					runlen += data[idx++] << 8;
+				}
+				int runofs = ofs + (signed char)data[idx++];
+				mymemcpy(buf + ofs, prev + runofs, runlen);
+
+				ofs += runlen;
+			}
+			else
+			{
+				if (runlen == -128)
+				{
+					runlen = data[idx++];
+					runlen += data[idx++] << 8;
+				}
+				else
+				{
+					runlen = -runlen;
+				}
+				memcpy(buf + ofs, data + idx, runlen);
+				ofs += runlen;
+				idx += runlen;
+			}
+		}
+	}
+	if (ofs > pixels) printf("wrote over buffer lz3c %d %d\n", ofs, pixels);
+	return idx;
+}
 
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 {
@@ -874,6 +974,13 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 	case LZ6:
 		readbytes = decode_lz6(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
 		break;
+	case LZ3C:
+		readbytes = decode_lz3c(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		break;
+	case LZ3B:
+	case LZ3D:
+	case LZ3E:
+		assert(0); // verify not implemented
 	default:
 		delete[] buf;
 		return 0;

@@ -1,6 +1,7 @@
 // TODO
 // - set minimum / maximum run length
 // - different graphics modes support
+// - lossy / don'tcare mask
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,28 +40,35 @@ int gVerify = 0;
 int gFramedelay = 4;
 int gThreads = 0;
 
-
+// trivial blocks
 int gUseBlack = 1;
 int gUseSame = 1;
 int gUseSingle = 1;
+
+// classic blocks
 int gUseRLE = 1;
 int gUseDelta8Frame = 1;
 int gUseDelta16Frame = 1;
 
-
+// retired
 int gUseLRLE8 = 0;
 int gUseLRLE16 = 0;
 int gUseLDelta8 = 0;
 int gUseLDelta16 = 0;
 int gUseLZ1 = 0;
 int gUseLZ2 = 0;
-int gUseLZ1b = 1;
 int gUseLZ2b = 0;
-int gUseLZ3 = 1;
+int gUseLZ3 = 0;
+int gUseLZ3B = 0;
+int gUseLZ3D = 0;
+int gUseLZ3E = 0;
+
+// flx blocks
+int gUseLZ1b = 1;
 int gUseLZ4 = 1;
 int gUseLZ5 = 1;
 int gUseLZ6 = 1;
-
+int gUseLZ3C = 1;
 
 class AddFrameTask : public Thread::PoolTask
 {
@@ -536,6 +544,27 @@ public:
 						delete[] data;
 					}
 				}
+
+				if (gUseLZ3E) // only LZ block that doesn't need previous frames
+				{
+					data = new unsigned char[pixels * 2];
+					len = encodeLZ3EFrame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+					if (gVerify) if (len > pixels) printf("overlong Lz3e %d +%d\n", len, len - pixels);
+					mFrame->mFrameSize[LZ3E] = len;
+
+					if (len < mFrame->mFrameDataSize)
+					{
+						delete[] mFrame->mFrameData;
+						mFrame->mFrameData = data;
+						mFrame->mFrameDataSize = len;
+						mFrame->mFrameType = LZ3E;
+						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					}
+					else
+					{
+						delete[] data;
+					}
+				}
 			}
 		}
 
@@ -713,11 +742,74 @@ public:
 						}
 					}
 
+					if (gUseLZ3B && gAggressive)
+					{
+						data = new unsigned char[pixels * 4];
+						len = encodeLZ3BFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz3b %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ3B] = len;
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ3B;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
+					if (gUseLZ3C && gAggressive)
+					{
+						data = new unsigned char[pixels * 4];
+						len = encodeLZ3CFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz3c %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ3C] = len;
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ3C;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
+					if (gUseLZ3D && gAggressive)
+					{
+						data = new unsigned char[pixels * 4];
+						len = encodeLZ3DFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong Lz3d %d +%d\n", len, len - pixels);
+						mFrame->mFrameSize[LZ3D] = len;
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = LZ3D;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
+					}
+
 				}
 
 				if (gUseLZ3)
 				{
-					data = new unsigned char[pixels * 2];
+					data = new unsigned char[pixels * 4];
 					len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
 					mFrame->mFrameSize[LZ3] = len;
@@ -866,7 +958,7 @@ void writechunk(FILE* outfile, Frame* frame, int tag, int frameno)
 		fputc(0, outfile); // copy 256
 		for (int i = 0; i < 256; i++)
 		{
-			fwrite(&frame->mPalette[i], 1, 3, outfile); // TODO: verify this is r,g,b
+			fwrite(&frame->mPalette[i], 1, 3, outfile);
 		}
 	}
 	chdr.size = sizeof(chdr) + frame->mFrameDataSize;
@@ -900,17 +992,6 @@ void output_flc(FliHeader& header, FILE* outfile)
 		case DELTA8FRAME: chunktype = 12; break;
 		case DELTA16FRAME: chunktype = 7; break;
 		case FLI_COPY: chunktype = 16; break;
-			// extended blocks:
-		case ONECOLOR: chunktype = 101; break;
-		case LINEARRLE8: chunktype = 102; break;
-		case LINEARRLE16: chunktype = 103; break;
-		case LINEARDELTA8: chunktype = 104; break;
-		case LINEARDELTA16: chunktype = 105; break;
-		case LZ1: chunktype = 106; break;
-		case LZ2: chunktype = 107; break;
-		case LZ3: chunktype = 108; break;
-		case LZ1B: chunktype = 109; break;
-		case LZ2B: chunktype = 101; break;
 		default: printf("?!?\n");
 		}
 		writechunk(outfile, walker, chunktype, frames);
@@ -1023,6 +1104,10 @@ void output_flx(FliHeader& header, FILE* outfile)
 		case LZ4: chunktype = 111; printf("4"); break;
 		case LZ5: chunktype = 112; printf("5"); break;
 		case LZ6: chunktype = 113; printf("6"); break;
+		case LZ3B: chunktype = 114; printf("x"); break;
+		case LZ3C: chunktype = 115; printf("y"); break;
+		case LZ3D: chunktype = 116; printf("z"); break;
+		case LZ3E: chunktype = 117; printf("w"); break;
 		default: printf("?!?\n");
 		}
 		fputc(walker->mFrameType, outfile);
@@ -1063,6 +1148,10 @@ void output_flx(FliHeader& header, FILE* outfile)
 	if (framecounts[17]) printf("4 lz scheme 4   %5d (%5d -%5d bytes)\n", framecounts[17], frameminsize[17], framemaxsize[17]);
 	if (framecounts[18]) printf("5 lz scheme 5   %5d (%5d -%5d bytes)\n", framecounts[18], frameminsize[18], framemaxsize[18]);
 	if (framecounts[19]) printf("6 lz scheme 6   %5d (%5d -%5d bytes)\n", framecounts[19], frameminsize[19], framemaxsize[19]);
+	if (framecounts[20]) printf("x lz scheme 3b  %5d (%5d -%5d bytes)\n", framecounts[20], frameminsize[20], framemaxsize[20]);
+	if (framecounts[21]) printf("y lz scheme 3c  %5d (%5d -%5d bytes)\n", framecounts[21], frameminsize[21], framemaxsize[21]);
+	if (framecounts[22]) printf("z lz scheme 3d  %5d (%5d -%5d bytes)\n", framecounts[22], frameminsize[22], framemaxsize[22]);
+	if (framecounts[23]) printf("w lz scheme 3e  %5d (%5d -%5d bytes)\n", framecounts[23], frameminsize[23], framemaxsize[23]);
 
 	hdr.frames = frames;
 
@@ -1100,8 +1189,8 @@ const option::Descriptor usage[] =
 int main(int parc, char* pars[])
 {
 	option::Stats stats(usage, parc - 1, pars + 1);
-	assert(stats.buffer_max < 16 && stats.options_max < 16);
-	option::Option options[16], buffer[16];
+	assert(stats.buffer_max < 32 && stats.options_max < 32);
+	option::Option options[32], buffer[32];
 	option::Parser parse(true, usage, parc - 1, pars + 1, options, buffer);
 
 	if (options[UNKNOWN])
@@ -1234,7 +1323,10 @@ int main(int parc, char* pars[])
 		{
 			fprintf(f, "%d, %d", walker->mFrameType, walker->mFrameDataSize);
 			for (int i = 0; i < FRAMETYPE_MAX; i++)
-				fprintf(f, ", %d", walker->mFrameSize[i]);
+//				if (walker->mFrameSize[i])
+					fprintf(f, ", %d", walker->mFrameSize[i]);
+//				else
+//					fprintf(f, ", ");
 			fprintf(f, "\n");
 			walker = walker->mNext;
 		}
