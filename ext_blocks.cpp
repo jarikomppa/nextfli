@@ -408,7 +408,7 @@ int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 				// copy
 				// one run + copy segment costs at least 5 bytes, so skip until at least 5 byte run is found
 				int lc = 0;
-				while (lc < 127 && ofs + lc + 5 < pixels &&
+				while (ofs + lc + 5 < pixels &&
 					bestLZRun5check(aFrame, aPrev, ofs + lc, pixels, 5) < 5 &&
 					runlength(aFrame + ofs + lc, 5) < 5)
 					lc++;

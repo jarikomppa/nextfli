@@ -723,7 +723,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				if (copylen == 127)
 				{
 					copylen = data[idx++];
-					copylen |= data[idx++];
+					copylen |= data[idx++] << 8;
 				}
 				memcpy(buf + ofs, data + idx, copylen);
 				ofs += copylen;
