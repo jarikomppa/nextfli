@@ -497,21 +497,21 @@ int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 
 		if (ofs < pixels)
 		{
-			// copy
-			// one run + copy segment costs at least 5 bytes, so skip until at least 5 byte run is found
-			int lc = 0;
-			while (lc < 127 && ofs + lc + 5 < pixels &&
-				bestLZRun4check(aFrame, ofs + lc, pixels, 5) < 5 &&
-				runlength(aFrame + ofs + lc, 5) < 5)
-				lc++;
-
-			if (ofs + lc + 5 > pixels)
-				lc = pixels - ofs;
-
 			int lz = bestLZRun4(aFrame, ofs, pixels, o);
 
 			if (lz < 5)
 			{
+				// copy
+				// one run + copy segment costs at least 5 bytes, so skip until at least 5 byte run is found
+				int lc = 0;
+				while (ofs + lc + 5 < pixels &&
+					bestLZRun4check(aFrame, ofs + lc, pixels, 5) < 5 &&
+					runlength(aFrame + ofs + lc, 5) < 5)
+					lc++;
+
+				if (ofs + lc + 5 > pixels)
+					lc = pixels - ofs;
+
 				if (lc > 126)
 				{
 					data[out++] = 127;
