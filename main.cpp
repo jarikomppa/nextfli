@@ -65,9 +65,9 @@ int gUseLZ3E = 0;
 
 // flx blocks
 int gUseLZ1b = 1;
-int gUseLZ4 = 1;
-int gUseLZ5 = 1;
-int gUseLZ6 = 1;
+int gUseLZ4 = 1; 
+int gUseLZ5 = 1; 
+int gUseLZ6 = 1; 
 int gUseLZ3C = 1;
 
 class AddFrameTask : public Thread::PoolTask
@@ -1056,9 +1056,9 @@ void output_flx(FliHeader& header, FILE* outfile)
 	for (int i = 0; i < 256; i++)
 	{
 		int c;
-		c = ((gRoot->mPalette[i] >> 16) & 0xe0) << 1;
+		c = ((gRoot->mPalette[i] >> 0) & 0xe0) << 1;
 		c |= ((gRoot->mPalette[i] >> 8) & 0xe0) >> 2;
-		c |= ((gRoot->mPalette[i] >> 0) & 0xe0) >> 5;
+		c |= ((gRoot->mPalette[i] >> 16) & 0xe0) >> 5;
 
 		hdr.pal[i * 2 + 0] = c >> 1;
 		hdr.pal[i * 2 + 1] = c & 1;
@@ -1251,7 +1251,7 @@ int main(int parc, char* pars[])
 			gFramedelay = atoi(options[FRAMEDELAY].arg);
 		else
 		{
-			printf("Invalid framedelay. Example: -f3\n");
+			printf("Invalid framedelay. Example: -r3\n");
 			return 0;
 		}
 	}
