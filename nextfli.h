@@ -121,9 +121,11 @@ struct Frame
 
 	Frame* mNext;
 
+	unsigned char mChecksum1, mChecksum2;
+
 	int mFrameSize[FRAMETYPE_MAX];
 
-	Frame() : mFrameType(0), mFrameData(0), mFrameDataSize(0), mPaletteChanged(0), mRgbPixels(0), mIndexPixels(0), mNext(0)
+	Frame() : mFrameType(0), mFrameData(0), mFrameDataSize(0), mPaletteChanged(0), mRgbPixels(0), mIndexPixels(0), mNext(0), mChecksum1(0), mChecksum2(0)
 	{
 		for (int i = 0; i < 256; i++)
 			mPalette[i] = 0;

@@ -392,9 +392,23 @@ public:
 	virtual ~EncodeTask()
 	{}
 
+	void calcChecksums()
+	{
+		int pixels = mHeader.mWidth * mHeader.mHeight;
+		mFrame->mChecksum1 = 0;
+		mFrame->mChecksum2 = 0;
+		for (int i = 0; i < pixels; i++)
+		{
+			mFrame->mChecksum1 ^= mFrame->mIndexPixels[i];
+			mFrame->mChecksum2 += mFrame->mChecksum1;
+		}
+	}
+
 	virtual void work()
 	{
 		int pixels = mHeader.mWidth * mHeader.mHeight;
+
+		calcChecksums();
 
 		int allzero = 1;
 		for (int i = 0; allzero && i < pixels; i++)
@@ -1076,11 +1090,6 @@ void output_flx(FliHeader& header, FILE* outfile)
 	int frames = 0;
 	while (walker)
 	{
-		if (frames == 0)
-			header.mOframe1 = ftell(outfile); // start of first frame
-		if (frames == 1)
-			header.mOframe2 = ftell(outfile); // start of second frame
-
 		int chunktype = 0;
 		switch (walker->mFrameType)
 		{
@@ -1117,6 +1126,8 @@ void output_flx(FliHeader& header, FILE* outfile)
 		{
 			fwrite(walker->mFrameData, 1, walker->mFrameDataSize, outfile);
 		}
+		fputc(walker->mChecksum1, outfile);
+		fputc(walker->mChecksum2, outfile);		
 
 		if (walker->mFrameDataSize > framemaxsize[walker->mFrameType]) framemaxsize[walker->mFrameType] = walker->mFrameDataSize;
 		if (walker->mFrameDataSize < frameminsize[walker->mFrameType]) frameminsize[walker->mFrameType] = walker->mFrameDataSize;
