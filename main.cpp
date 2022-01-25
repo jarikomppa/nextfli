@@ -1,7 +1,5 @@
 // TODO
-// - set minimum / maximum run length
 // - different graphics modes support
-// - lossy / don'tcare mask
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,10 +33,13 @@ int gDither = 0;
 int gExtendedBlocks = 0;
 int gClassicBlocks = 1;
 int gSlowBlocks = 1;
-int gAggressive = 0;
+int gAggressive = 1;
 int gVerify = 0;
 int gFramedelay = 4;
 int gThreads = 0;
+int gMinSpan = 0;
+int gLossy = 0;
+int gLossyKeyframes = 0;
 
 // trivial blocks
 int gUseBlack = 1;
@@ -300,6 +301,21 @@ public:
 	}
 };
 
+void applyLossy(Frame *prev, Frame *frame, const int pixels)
+{
+	for (int i = 0; i < pixels; i++)
+	{
+		int pc = prev->mRgbPixels[i];
+		int cc = frame->mRgbPixels[i];
+		int delta = 0;
+		delta += abs(((pc >> 0) & 7) - ((cc >> 0) & 7));
+		delta += abs(((pc >> 3) & 7) - ((cc >> 3) & 7));
+		delta += abs(((pc >> 6) & 7) - ((cc >> 6) & 7));
+		if (delta <= gLossy)
+			frame->mRgbPixels[i] = pc;
+	}
+}
+
 void quantize(const FliHeader& header)
 {
 	auto start = std::chrono::steady_clock::now();
@@ -323,6 +339,22 @@ void quantize(const FliHeader& header)
 
 	printf("Waiting for threads..\n");
 	threadpool.waitUntilDone(100, true);
+
+	if (gLossy > 0)
+	{
+		printf("Applying lossy filter..\n");
+		walker = gRoot->mNext;
+		Frame* prev = gRoot;
+		int i = 0;
+		while (walker)
+		{
+			if (gLossyKeyframes == 0 || (i % gLossyKeyframes) != 0)
+				applyLossy(prev, walker, header.mWidth * header.mHeight);
+			prev = walker;
+			walker = walker->mNext;
+			i++;
+		}
+	}
 
 	int colors[512];
 	memset(colors, 0xff, 512 * sizeof(unsigned int));
@@ -1174,7 +1206,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, AGGRO };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
@@ -1184,7 +1216,7 @@ const option::Descriptor usage[] =
 	{ GIF,			0, "g", "gif", option::Arg::None,			 " -g --gif\t Output GIF format (default: use flx)"},
 	{ STD,			0, "s", "std", option::Arg::None,			 " -s --std\t Use standard blocks (default: flc yes, flx no)"},
 	{ EXT,			0, "e", "ext", option::Arg::None,			 " -e --ext\t Use extended blocks (default: flc no, fli yes)"},
-	{ AGGRO,		0, "X", "aggressive", option::Arg::None,	 " -X --aggressive\t Compress better (default: don't)"},
+	{ QUICK,		0, "q", "quick", option::Arg::None,			 " -q --quick\t Compress faster, bigger files (default: don't)"},
 	{ HALFRES,      0, "l", "halfres", option::Arg::None,        " -l --halfres\t Reduce output resolution to half x, half y (default: don't)"},
 	{ DITHER,       0, "d", "dither", option::Arg::None,         " -d --dither\t Use ordered dither (default: don't)"},
 	{ FASTSCALE,    0, "p", "fastscale", option::Arg::None,      " -p --fastscale\t Use fast image scaling (default: don't)"},
@@ -1192,6 +1224,9 @@ const option::Descriptor usage[] =
 	{ THREADS,      0, "t", "threads", option::Arg::Optional,    " -t --threads\tNumber of threads to use (default: num of logical cores)"},
 	{ FRAMEDELAY,   0, "r", "framedelay", option::Arg::Optional, " -r --framedelay\tFrame delay 1=50hz, 2=25hz, 3=16.7hz 4=12.5hz (default: 4)"},
 	{ INFO,         0, "i", "info", option::Arg::Optional,       " -i --info\t Output frame info log to file (default: don't)"},
+	{ MINSPAN,      0, "m", "minspan", option::Arg::Optional,    " -m --minspan\t Set minimum span. Trade file size for faster decode. (default: 0)"},
+	{ LOSSY,        0, "L", "lossy", option::Arg::Optional,      " -L --lossy\t Don't update pixels with manhattan rgb distance x (default: 0)"},
+	{ KEYFRAMES,    0, "K", "keyframes", option::Arg::Optional,  " -K --keyframes\t Don't apply lossy filter every n frames (default: inf)"},
 	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
 };
@@ -1241,7 +1276,7 @@ int main(int parc, char* pars[])
 
 	if (options[STD]) gClassicBlocks = 1;
 	if (options[EXT]) gExtendedBlocks = 1;
-	if (options[AGGRO]) gAggressive = 1;
+	if (options[QUICK]) gAggressive = 0;
 	if (options[HALFRES]) gHalfRes = 1;
 	if (options[DITHER]) gDither = 1;
 	if (options[FASTSCALE]) gPointSample = 1;
@@ -1256,6 +1291,16 @@ int main(int parc, char* pars[])
 			return 0;
 		}
 	}
+	if (options[MINSPAN])
+	{
+		if (options[MINSPAN].arg != 0 && options[MINSPAN].arg[0])
+			gMinSpan = atoi(options[MINSPAN].arg);
+		else
+		{
+			printf("Invalid min span. Example: -m20\n");
+			return 0;
+		}
+	}
 	if (options[FRAMEDELAY])
 	{
 		if (options[FRAMEDELAY].arg != 0 && options[FRAMEDELAY].arg[0])
@@ -1263,6 +1308,26 @@ int main(int parc, char* pars[])
 		else
 		{
 			printf("Invalid framedelay. Example: -r3\n");
+			return 0;
+		}
+	}
+	if (options[LOSSY])
+	{
+		if (options[LOSSY].arg != 0 && options[LOSSY].arg[0])
+			gLossy = atoi(options[LOSSY].arg);
+		else
+		{
+			printf("Invalid lossy. Example: -L3\n");
+			return 0;
+		}
+	}
+	if (options[KEYFRAMES])
+	{
+		if (options[KEYFRAMES].arg != 0 && options[KEYFRAMES].arg[0])
+			gLossyKeyframes = atoi(options[KEYFRAMES].arg);
+		else
+		{
+			printf("Invalid keyframes. Example: -K25\n");
 			return 0;
 		}
 	}
@@ -1300,6 +1365,7 @@ int main(int parc, char* pars[])
 		printf("No frames loaded.\n");
 		return 0;
 	}
+
 	quantize(header);
 	encode(header);
 	printf("Opening %s for writing..\n", parse.nonOption(0));

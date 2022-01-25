@@ -134,6 +134,8 @@ struct Frame
 	}
 };
 
+extern int gMinSpan;
+
 int encodeDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int width, int height);
 int encodeDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int width, int height);
 int encodeRLEFrame(unsigned char* aRLEframe, unsigned char* aIndexPixels, int width, int height);
