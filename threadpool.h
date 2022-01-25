@@ -44,6 +44,7 @@ namespace Thread
 		int mDeleteTask;
 		PoolTask() : mDeleteTask(0) {}
 		virtual void work() = 0;
+		virtual ~PoolTask() {}
 	};
 
 

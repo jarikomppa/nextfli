@@ -165,3 +165,4 @@ int skiplength16(unsigned char* cdata, unsigned char* cprev, int max);
 int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs, int max);
 int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, signed char& runofs, int max);
 
+void verifyfile(const char* fn);

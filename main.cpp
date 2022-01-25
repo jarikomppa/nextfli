@@ -66,7 +66,7 @@ int gUseLZ3E = 0;
 // flx blocks
 int gUseLZ1b = 1;
 int gUseLZ4 = 1; 
-int gUseLZ5 = 1; 
+int gUseLZ5 = 1;
 int gUseLZ6 = 1; 
 int gUseLZ3C = 1;
 
@@ -1345,6 +1345,10 @@ int main(int parc, char* pars[])
 		printf("Frame info log written to %s\n", options[INFO].arg);
 	}
 
+	if (options[VERIFY])
+	{
+		verifyfile(parse.nonOption(0));
+	}
 
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;

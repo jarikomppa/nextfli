@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -505,7 +506,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz1 %d %d\n", ofs, pixels);
+	if (ofs > pixels) printf("wrote over buffer lz1b %d %d\n", ofs, pixels);
 	return idx;
 }
 
@@ -981,6 +982,7 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 	case LZ3D:
 	case LZ3E:
 		assert(0); // verify not implemented
+		/* fallthrough */
 	default:
 		delete[] buf;
 		return 0;
@@ -998,4 +1000,120 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
 		}
 	delete[] buf;
 	return 0;
+}
+
+
+int readbyte(unsigned char* &f)
+{
+	return *f++;
+}
+
+int readword(unsigned char* &f)
+{
+	int a = *f++;
+	int b = *f++;
+	return a + (b << 8);
+}
+
+void verifyfile(const char* fn)
+{
+	FILE* f = fopen(fn, "rb");
+	if (!f)
+	{
+		printf("Can't verify \"%s\" - file not found\n", fn);
+		return;
+	}
+	fseek(f, 0, SEEK_END);
+	int len = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	unsigned char* data = new unsigned char[len];
+	unsigned char* p = data;
+	fread(data, 1, len, f);
+	fclose(f);
+	if (readbyte(p) != 'N' ||
+		readbyte(p) != 'X' ||
+		readbyte(p) != 'F' ||
+		readbyte(p) != 'L')
+	{
+		printf("Header tag wrong in \"%s\"\n", fn);
+		delete[] data;
+		return;
+	}
+	int frames = readword(p);
+	int speed = readword(p);
+	if (frames == 0 || speed == 0)
+	{
+		printf("%d frames, %d speed in \"%s\"\n", frames, speed, fn);
+		delete[] data;
+		return;
+	}
+	int count = 0;
+	for (int i = 0; i < 512; i++)
+		count += readbyte(p);
+	if (count == 0)
+	{
+		printf("All black palette in \"%s\"\n", fn);
+		delete[] data;
+		return;	
+	}
+	int pixels = 192 * 256;
+	unsigned char* f1 = new unsigned char[pixels];
+	unsigned char* f2 = new unsigned char[pixels];
+	
+	printf("Verifying \"%s\", %d frames, %d speed\n", fn, frames, speed);
+
+	for (int frame = 0; frame < frames; frame++)
+	{
+		int ftype = readbyte(p);
+		int flen = readword(p);
+		switch (ftype)
+		{
+		case SAMEFRAME:
+			memcpy(f1, f2, pixels);
+			break;
+		case BLACKFRAME:
+			memset(f1, 0, pixels);
+			break;
+		case ONECOLOR:
+			memset(f1, readbyte(p), pixels);
+			break;
+		case LZ1B:
+			p += decode_lz1b(f1, f2, p, flen, pixels);
+			break;
+		case LZ4:
+			p += decode_lz4(f1, p, flen, pixels);
+			break;
+		case LZ5:
+			p += decode_lz5(f1, f2, p, flen, pixels);
+			break;
+		case LZ6:
+			p += decode_lz6(f1, f2, p, flen, pixels);
+			break;
+		case LZ3C:
+			p += decode_lz3c(f1, f2, p, flen, pixels);
+			break;
+		default:
+			assert(0); // verify not implemented
+		}
+		int hash1 = readbyte(p);
+		int hash2 = readbyte(p);
+
+		unsigned char sum1 = 0;
+		unsigned char sum2 = 0;
+		for (int i = 0; i < pixels; i++)
+		{
+			sum1 ^= f1[i];
+			sum2 += sum1;
+		}
+		if (sum1 != hash1 || sum2 != hash2)
+		{
+			printf("Frame hash mismatch - frame %d, \"%s\" - frametype %d - %d,%d vs %d,%d\n", frame, fn, ftype, sum1, sum2, hash1, hash2);
+		}
+
+		unsigned char* t = f1;
+		f1 = f2;
+		f2 = t;
+	}
+	delete[] data;
+	printf("Verify done.\n");
 }
