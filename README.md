@@ -1,5 +1,7 @@
 # Special FLIC-like encoder for Spectrum Next
 
+by Jari Komppa, http://iki.fi/sol
+
 This is an animation encoder / compressor designed to generate files for the .playflx dot command on the ZX Spectrum Next.
 
 As such it's fixed to the ZX Spectrum Next limitations, including display resolution and palette bit depth.
@@ -140,3 +142,30 @@ A value of 20 would add a keyframe every 20 frames. By default no keyframes are 
 
 The source currently builds on windows. Everything is relatively portable except for thread-related stuff.
 Pull requests are welcome.
+
+## Why is it so slow?
+
+Nextfli uses a brute force algorithm to find the best spans to copy from the previous frame. This is done
+separately for every compression encoding. Using fast mode reduces the number of compressione encodings
+to use.
+
+## How do I convert from video file to nextfli?
+
+First, separate all the frames to individual image files, preferably in the target resolution (e.g, 256x192).
+This can be done using ffmpeg, for example:
+
+	ffmpeg -i foo.mp4 -vf fps=50/4,scale=256:192 foo%%04d.png
+
+That command tells ffmpeg to output frames at the desired rate (here, 1/4 of 50hz), scale the frames to the
+desired resolution (256x192) and output the separate frames as png files.
+
+Then simply feed those frames to nextfli, possibly tweaking options until you're either satisfied or
+disgusted.
+
+## I love it, where's the donate button?
+
+The Finnish law unfortunately forbids me from asking for donations.
+
+I know, it's stupid. Blame the national church, who accept donations and love the status quo. Maybe they'll change the laws one day.
+
+That said, nothing stops me from accepting gifts, but I'm not suggesting you do anything.
