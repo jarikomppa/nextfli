@@ -141,12 +141,13 @@ A value of 20 would add a keyframe every 20 frames. By default no keyframes are 
 ## Linux and Mac support
 
 The source currently builds on windows. Everything is relatively portable except for thread-related stuff.
+
 Pull requests are welcome.
 
 ## Why is it so slow?
 
 Nextfli uses a brute force algorithm to find the best spans to copy from the previous frame. This is done
-separately for every compression encoding. Using fast mode reduces the number of compressione encodings
+separately for every compression encoding. Using fast mode reduces the number of compression encodings
 to use.
 
 ## How do I convert from video file to nextfli?
