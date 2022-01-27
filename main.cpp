@@ -570,7 +570,7 @@ public:
 		{
 			if (gSlowBlocks)
 			{
-				if (gUseLZ4) // only LZ block that doesn't need previous frames
+				if (gUseLZ4 && (gAggressive || !mPrev)) // only LZ block that doesn't need previous frames
 				{
 					data = new unsigned char[pixels * 2];
 					len = encodeLZ4Frame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
