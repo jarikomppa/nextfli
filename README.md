@@ -148,9 +148,14 @@ also make compression worse.
 
 ## Linux and Mac support
 
-The project was written on windows, but everything should be relatively portable.
+The project was written on windows, but everything should be relatively portable. Just hit all the
+cpp files with a c++ compiler. On linux, you need -lpthread.
 
-Pull requests are welcome.
+Portability issues? Optimizations? Pull requests are welcome.
+
+Note that due to the way file masks work in linux, you'll need to put the file mask in quotes, e.g:
+
+    nextfli output.flx "myanim/img*.png"
 
 ## Why is it so slow?
 
