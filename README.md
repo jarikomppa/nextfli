@@ -21,12 +21,13 @@ swapping between encoders on frame by frame basis. FLX files take typically abou
 
 You may find limited success with full motion video (FMV). The best results there can be achieved when camera is standing
 still and only part of the image is in motion, like someone sitting and talking. When in doubt, try using the lossy 
-compression option and/or reduce video size on screen.
+compression option, reduced palette and/or reduce video size on screen.
 
 If compression is low, you may find that the zx spectrum next cannot decompress the frames fast enough for fluid video.
-For some workloads this is unavoidable. You can try using lossy compression and/or reducing video size in these cases.
+For some workloads this is unavoidable. You can try using lossy compression, reduced palette and/or reducing video size 
+in these cases.
 
-An occasional slow frame does not matter as playflx pre-decodes as many frames as it can fit in memory.
+An occasional slow/big frame does not matter as playflx pre-decodes as many frames as it can fit in memory.
 
 ## Options
 
@@ -147,7 +148,7 @@ also make compression worse.
 
 ## Linux and Mac support
 
-The source currently builds on windows. Everything is relatively portable except for thread-related stuff.
+The project was written on windows, but everything should be relatively portable.
 
 Pull requests are welcome.
 
@@ -169,6 +170,21 @@ desired resolution (256x192) and output the separate frames as png files.
 
 Then simply feed those frames to nextfli, possibly tweaking options until you're either satisfied or
 disgusted.
+
+## The file doesn't play smoothly!
+
+While the ZX Spectrum Next is more powerful than its predecessors, it is still a fairly low-powered machine.
+If you go back and look at what kinds of animations .FLI and .FLC files were, back when they were running on
+sub-20MHz PC:s - PCs that were, still, more powerful than the Next is due to being 16 bit - you'll note that
+they were carefully crafted to produce small files and decode fast enough.
+
+FLX isn't a general video codec, it's an animation format. Don't expect miracles. Workloads affect bit rate
+a lot, and it's easy to overwhelm the machine. Animations with static backgrounds and large flat areas work 
+the best.
+
+To get things working you may try to reduce the animation size (to reduce workload in general), reduce number
+of colors (to reduce noise and create larger flat areas) or try the lossy option (which reduces the number of
+small changes).
 
 ## I love it, where's the donate button?
 

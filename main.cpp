@@ -6,6 +6,7 @@
 #include <string.h>
 #include <chrono>
 
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -22,7 +23,11 @@
 #include <iostream>
 #include "optionparser.h"
 
+#if defined(_WIN32) || defined(_WIN64)
 #include <windows.h> // findfirst
+#else
+#include <glob.h>
+#endif
 
 #include "gif.h"
 
@@ -172,6 +177,8 @@ void loadframes(FliHeader& header, const char* filemask)
 	auto start = std::chrono::steady_clock::now();
 	Thread::Pool threadpool;
 	threadpool.init(gThreads);
+
+#if defined(_WIN32) || defined(_WIN64)
 	WIN32_FIND_DATAA FindFileData;
 	HANDLE hFind;
 	hFind = FindFirstFileA(filemask, &FindFileData);
@@ -200,6 +207,17 @@ void loadframes(FliHeader& header, const char* filemask)
 
 		FindClose(hFind);
 	}
+#else
+	glob_t glob_result;
+	glob(filemask, GLOB_TILDE, &glob_result);
+	for (unsigned int i = 0; i < glob_result.gl_pathc; i++)
+	{
+		printf("Loading %s                    \r", glob_result.gl_pathv[i]);
+		addFrame(glob_result.gl_pathv[i], header, threadpool);
+		header.mFrames++;
+	}
+#endif
+
 	printf("\nWaiting for threads..\n");
 	threadpool.waitUntilDone(100, true);
 	auto end = std::chrono::steady_clock::now();
@@ -1272,9 +1290,7 @@ int main(int parc, char* pars[])
 			gSlowBlocks = 1;
 		}
 
-	SYSTEM_INFO sysinfo;
-	GetSystemInfo(&sysinfo);
-	gThreads = sysinfo.dwNumberOfProcessors;
+	gThreads = std::thread::hardware_concurrency();
 
 	if (options[STD]) gClassicBlocks = 1;
 	if (options[EXT]) gExtendedBlocks = 1;

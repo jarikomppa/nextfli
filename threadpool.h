@@ -1,3 +1,6 @@
+#include <thread>
+#include <mutex>
+
 #pragma once
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
@@ -5,37 +8,6 @@
 
 namespace Thread
 {
-	typedef void(*threadFunction)(void *aParam);
-
-	struct ThreadHandleData;
-	typedef ThreadHandleData* ThreadHandle;
-
-	void * createMutex();
-	void destroyMutex(void *aHandle);
-	void lockMutex(void *aHandle);
-	void unlockMutex(void *aHandle);
-
-	ThreadHandle createThread(threadFunction aThreadFunction, void *aParameter);
-
-	void sleep(int aMSec);
-	void wait(ThreadHandle aThreadHandle);
-	void release(ThreadHandle aThreadHandle);
-
-	void * createMutex();
-	void destroyMutex(void *aHandle);
-	void lockMutex(void *aHandle);
-	void unlockMutex(void *aHandle);
-
-	struct thread_data
-	{
-		threadFunction mFunc;
-		void *mParam;
-	};
-
-	ThreadHandle createThread(threadFunction aThreadFunction, void *aParameter);
-	void sleep(int aMSec);
-	void wait(ThreadHandle aThreadHandle);
-	void release(ThreadHandle aThreadHandle);
 	void poolWorker(void *aParam);
 
 	class PoolTask
@@ -53,8 +25,8 @@ namespace Thread
 	public:
 		volatile int mRunning; // running flag, used to flag threads to stop (used by dtor)
 		int mThreadCount; // number of threads
-		ThreadHandle *mThread; // array of thread handles
-		void *mWorkMutex; // mutex to protect task array/maxtask
+		std::thread **mThread; // array of thread handles
+		std::mutex *mWorkMutex; // mutex to protect task array/maxtask
 		PoolTask *mTaskArray[MAX_THREADPOOL_TASKS]; // pointers to tasks
 		int mMaxTask; // how many tasks are pending
 		int mTasksRunning; // how many tasks are running
