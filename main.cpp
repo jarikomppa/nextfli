@@ -959,7 +959,7 @@ void encode(const FliHeader& header)
 	{
 		EncodeTask* t = new EncodeTask(walker, prev, header);
 		t->mDeleteTask = 1;
-#ifdef NDEBUG
+#if (!defined(_WIN32) && !defined(_WIN64)) || defined(NDEBUG)
 		threadpool.addWork(t);
 #else
 		//threadpool.addWork(t);

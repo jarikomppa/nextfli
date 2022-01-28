@@ -49,8 +49,7 @@ namespace Thread
 			delete mThread[i];
 		}
 		delete[] mThread;
-		if (mWorkMutex)
-			delete mWorkMutex;
+		delete mWorkMutex;
 	}
 
 	void Pool::addWork(PoolTask *aTask)
@@ -61,19 +60,19 @@ namespace Thread
 		}
 		else
 		{
-			if (mWorkMutex) mWorkMutex->lock();
+			mWorkMutex->lock();
 			if (mMaxTask == MAX_THREADPOOL_TASKS)
 			{
 				// If we're at max tasks, do the task on calling thread 
 				// (we're in trouble anyway, might as well slow down adding more work)
-				if (mWorkMutex) mWorkMutex->unlock();
+				mWorkMutex->unlock();
 				aTask->work();
 			}
 			else
 			{
 				mTaskArray[mMaxTask] = aTask;
 				mMaxTask++;
-				if (mWorkMutex) mWorkMutex->unlock();
+				mWorkMutex->unlock();
 			}
 		}
 	}
@@ -81,7 +80,7 @@ namespace Thread
 	PoolTask * Pool::getWork()
 	{
 		PoolTask *t = 0;
-		if (mWorkMutex) mWorkMutex->lock();
+		mWorkMutex->lock();
 		if (mMaxTask > 0)
 		{
 			int r = mRobin % mMaxTask;
@@ -91,20 +90,20 @@ namespace Thread
 			mMaxTask--;
 			mTasksRunning++;
 		}
-		if (mWorkMutex) mWorkMutex->unlock();
+		mWorkMutex->unlock();
 		return t;
 	}
 
 	void Pool::doneWork()
 	{
-		if (mWorkMutex) mWorkMutex->lock();
+		mWorkMutex->lock();
 		mTasksRunning--;
-		if (mWorkMutex) mWorkMutex->unlock();
+		mWorkMutex->unlock();
 	}
 
 	void Pool::waitUntilDone(int aSleep, bool aPrintout)
 	{
-		while (mMaxTask + mTasksRunning) 
+		while (mMaxTask + mTasksRunning)
 		{ 
 			std::this_thread::sleep_for(std::chrono::milliseconds(aSleep));
 			if (aPrintout)
