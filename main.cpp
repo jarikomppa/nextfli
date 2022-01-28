@@ -40,6 +40,7 @@ int gThreads = 0;
 int gMinSpan = 0;
 int gLossy = 0;
 int gLossyKeyframes = 0;
+int gPaletteWidth = 256;
 
 // trivial blocks
 int gUseBlack = 1;
@@ -386,7 +387,7 @@ void quantize(const FliHeader& header)
 	unsigned char* pal;
 	unsigned int intpal[256];
 	int idxs;
-	int ofs = sq_reduce(q, &idxmap, &pal, &idxs, 256);
+	int ofs = sq_reduce(q, &idxmap, &pal, &idxs, gPaletteWidth);
 
 	for (int i = 0; i < 256; i++)
 	{
@@ -1206,7 +1207,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
@@ -1227,6 +1228,7 @@ const option::Descriptor usage[] =
 	{ MINSPAN,      0, "m", "minspan", option::Arg::Optional,    " -m --minspan\t Set minimum span. Trade file size for faster decode. (default: 0)"},
 	{ LOSSY,        0, "L", "lossy", option::Arg::Optional,      " -L --lossy\t Don't update pixels with manhattan rgb distance x (default: 0)"},
 	{ KEYFRAMES,    0, "K", "keyframes", option::Arg::Optional,  " -K --keyframes\t Don't apply lossy filter every n frames (default: inf)"},
+	{ PALWIDTH,     0, "c", "colors", option::Arg::Optional,     " -c --colors\t Number of colors in palette. (default: 256)"},
 	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
 };
@@ -1336,6 +1338,16 @@ int main(int parc, char* pars[])
 		if (options[INFO].arg == 0 || !options[INFO].arg[0])
 		{
 			printf("Invalid infolog. Example: -iinfolog.txt\n");
+			return 0;
+		}
+	}
+	if (options[PALWIDTH])
+	{
+		if (options[PALWIDTH].arg != 0 && options[PALWIDTH].arg[0])
+			gPaletteWidth = atoi(options[PALWIDTH].arg);
+		else
+		{
+			printf("Invalid number of colors. Example: -c16\n");
 			return 0;
 		}
 	}

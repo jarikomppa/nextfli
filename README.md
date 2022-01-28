@@ -138,6 +138,13 @@ used to mitigate the effect. The result will naturally be larger files.
 
 A value of 20 would add a keyframe every 20 frames. By default no keyframes are applied.
 
+### -c --colors
+
+Number of colors in the resulting palette. Defaults to 256, which is also the maximum. Using reduced
+number of colors may lead to larger continious areas and thus improve compression, while making the
+image quality worse. When reducing palette a lot, using dithering may help with image quality but will
+also make compression worse.
+
 ## Linux and Mac support
 
 The source currently builds on windows. Everything is relatively portable except for thread-related stuff.
