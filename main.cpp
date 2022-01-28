@@ -27,6 +27,7 @@
 #include <windows.h> // findfirst
 #else
 #include <glob.h>
+#define _strdup strdup
 #endif
 
 #include "gif.h"
@@ -209,7 +210,7 @@ void loadframes(FliHeader& header, const char* filemask)
 	}
 #else
 	glob_t glob_result;
-	glob(filemask, GLOB_TILDE, &glob_result);
+	glob(filemask, GLOB_TILDE, NULL, &glob_result);
 	for (unsigned int i = 0; i < glob_result.gl_pathc; i++)
 	{
 		printf("Loading %s                    \r", glob_result.gl_pathv[i]);
@@ -1115,7 +1116,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	} hdr;
 #pragma pack(pop)
 	memset(&hdr, 0, sizeof(hdr));
-	hdr.tag = 'LFXN'; // reverses to 'NXFL'
+	hdr.tag = 0x4c46584e; // 'NXFL'
 	hdr.frames = header.mFrames;
 	hdr.speed = gFramedelay;
 	for (int i = 0; i < 256; i++)
@@ -1228,7 +1229,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH };
 const option::Descriptor usage[] =
 {
-	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename outputfilemask [options]\n\nOptions:"},
+	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename inputfilemask [options]\n\nOptions:"},
 	{ HELP,			0, "h", "help", option::Arg::None,			 " -h --help\t Print usage and exit"},
 	{ FLC,			0, "f", "flc", option::Arg::None,			 " -f --flc\t Output standard FLC format (default: use flx)"},
 	{ FLX,			0, "x", "flx", option::Arg::None,			 " -x --flx\t Output nextfli FLX format (default: use flx)"},
