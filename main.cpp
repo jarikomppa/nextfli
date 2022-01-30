@@ -47,6 +47,8 @@ int gMinSpan = 0;
 int gLossy = 0;
 int gLossyKeyframes = 0;
 int gPaletteWidth = 256;
+int gChunkyX = 1;
+int gChunkyY = 1;
 
 // trivial blocks
 int gUseBlack = 1;
@@ -336,6 +338,18 @@ void applyLossy(Frame *prev, Frame *frame, const int pixels)
 	}
 }
 
+void applyChunky(Frame* frame, const int width, const int height)
+{
+	for (int i = 0; i < height; i++)
+		for (int j = 0; j < width; j++)
+		{
+			int cx = ((j / gChunkyX) * gChunkyX);
+			int cy = ((i / gChunkyY) * gChunkyY);
+			frame->mRgbPixels[i * width + j] =
+				frame->mRgbPixels[cy * width + cx];
+		}
+}
+
 void quantize(const FliHeader& header)
 {
 	auto start = std::chrono::steady_clock::now();
@@ -359,6 +373,17 @@ void quantize(const FliHeader& header)
 
 	printf("Waiting for threads..\n");
 	threadpool.waitUntilDone(100, true);
+
+	if (gChunkyX > 1 || gChunkyY > 1)
+	{
+		printf("Applying chunky filter..\n");
+		Frame* walker = gRoot;
+		while (walker)
+		{
+			applyChunky(walker, header.mWidth, header.mHeight);
+			walker = walker->mNext;
+		}
+	}
 
 	if (gLossy > 0)
 	{
@@ -1226,7 +1251,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename inputfilemask [options]\n\nOptions:"},
@@ -1248,6 +1273,8 @@ const option::Descriptor usage[] =
 	{ LOSSY,        0, "L", "lossy", option::Arg::Optional,      " -L --lossy\t Don't update pixels with manhattan rgb distance x (default: 0)"},
 	{ KEYFRAMES,    0, "K", "keyframes", option::Arg::Optional,  " -K --keyframes\t Don't apply lossy filter every n frames (default: inf)"},
 	{ PALWIDTH,     0, "c", "colors", option::Arg::Optional,     " -c --colors\t Number of colors in palette. (default: 256)"},
+	{ CHUNKYX,      0, "X", "chunkyx", option::Arg::Optional,    " -X --chunkyx\t Pixels per pixel horizontally (default: 1)"},
+	{ CHUNKYY,      0, "Y", "chunkyy", option::Arg::Optional,    " -Y --chunkyy\t Pixels per pixel vertically (default: 1)"},
 	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
 };
@@ -1365,6 +1392,26 @@ int main(int parc, char* pars[])
 		else
 		{
 			printf("Invalid number of colors. Example: -c16\n");
+			return 0;
+		}
+	}
+	if (options[CHUNKYX])
+	{
+		if (options[CHUNKYX].arg != 0 && options[CHUNKYX].arg[0])
+			gChunkyX = atoi(options[CHUNKYX].arg);
+		else
+		{
+			printf("Invalid chunky x. Example: -X3\n");
+			return 0;
+		}
+	}
+	if (options[CHUNKYY])
+	{
+		if (options[CHUNKYY].arg != 0 && options[CHUNKYY].arg[0])
+			gChunkyX = atoi(options[CHUNKYY].arg);
+		else
+		{
+			printf("Invalid chunky y. Example: -Y3\n");
 			return 0;
 		}
 	}

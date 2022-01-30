@@ -146,6 +146,12 @@ number of colors may lead to larger continious areas and thus improve compressio
 image quality worse. When reducing palette a lot, using dithering may help with image quality but will
 also make compression worse.
 
+### -X --chunkyx 
+### -Y --chunkyy
+
+Make "big pixels". With -X2 -Y2 you practically shrink the resolution to 25%. In practice this is still
+rather heavy, but may help improving the compression.
+
 ## Linux and Mac support
 
 The project was written on windows, but everything should be relatively portable. Just hit all the
