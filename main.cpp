@@ -1221,6 +1221,10 @@ void output_flx(FliHeader& header, FILE* outfile)
 	}
 	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total / 1024, total / (1024 * 1024), ftell(outfile) - total);
 	printf("Compression ratio %3.3f%%, %d spans and %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), totalspans / frames, total / frames);
+	float mspf = ((totalspans / (float)frames) / 10.0f);
+	float recommended_fps = 1000.0f / mspf;
+	int retraces = (int)floor(mspf / 20) + 1;
+	printf("Recommended frame rate based on spans: %3.3f (about %d retraces)\n", recommended_fps, retraces);
 	printf("\nBlock types:\n");
 	if (framecounts[1]) printf("h sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
 	if (framecounts[2]) printf("s blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);
