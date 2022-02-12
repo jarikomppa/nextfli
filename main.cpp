@@ -43,7 +43,9 @@ int gAggressive = 1;
 int gVerify = 0;
 int gFramedelay = 4;
 int gThreads = 0;
-int gMinSpan = 0;
+int gGlobalMinSpan = 0;
+int gSpanGoal = 0;
+int gMaxFrameSize = 8192;
 int gLossy = 0;
 int gLossyKeyframes = 0;
 int gPaletteWidth = 256;
@@ -491,102 +493,78 @@ public:
 		for (int i = 0; allzero && i < pixels; i++)
 			allzero = (mFrame->mIndexPixels[i] == 0);
 
-		if (allzero && gUseBlack)
+		int minspan = gGlobalMinSpan;
+		do
 		{
-			mFrame->mFrameType = BLACKFRAME;
-			mFrame->mFrameData = 0;
-			mFrame->mFrameDataSize = 0;
-			mFrame->mSpans = 0;
-			if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-			return;
-		}
-
-		if (mPrev && gUseSame)
-		{
-			// Check if previous frame is identical to current
-			int identical = 1;
-			for (int i = 0; identical && i < pixels; i++)
-				identical = (mFrame->mIndexPixels[i] == mPrev->mIndexPixels[i]);
-			if (identical)
+			if (allzero && gUseBlack)
 			{
-				mFrame->mFrameType = SAMEFRAME;
+				mFrame->mFrameType = BLACKFRAME;
 				mFrame->mFrameData = 0;
 				mFrame->mFrameDataSize = 0;
 				mFrame->mSpans = 0;
 				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
-		}
 
-		if (gExtendedBlocks && gUseSingle)
-		{
-			int allsingle = 1;
-			for (int i = 0; allsingle && i < pixels; i++)
-				allsingle = (mFrame->mIndexPixels[i] == mFrame->mIndexPixels[0]);
-			if (allsingle)
+			if (mPrev && gUseSame)
 			{
-				mFrame->mFrameType = ONECOLOR;
-				mFrame->mFrameData = new unsigned char[1];
-				mFrame->mFrameDataSize = 1;
-				mFrame->mFrameData[0] = mFrame->mIndexPixels[0];
-				mFrame->mSpans = 0;
-				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				return;
-			}
-		}
-
-		unsigned char* data = 0;
-		int len = 0;
-		mFrame->mFrameData = 0;
-		mFrame->mFrameDataSize = 0xffffff;
-
-		if (gClassicBlocks)
-		{
-			mFrame->mFrameData = new unsigned char[pixels * 2];
-			mFrame->mFrameDataSize = mHeader.mWidth * mHeader.mHeight;
-			memcpy(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-			mFrame->mFrameType = FLI_COPY;
-			if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-
-			if (gUseRLE)
-			{
-				data = new unsigned char[pixels * 2];
-				len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-				mFrame->mSpans = 0;
-				if (gVerify) if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
-				if (len < mFrame->mFrameDataSize)
+				// Check if previous frame is identical to current
+				int identical = 1;
+				for (int i = 0; identical && i < pixels; i++)
+					identical = (mFrame->mIndexPixels[i] == mPrev->mIndexPixels[i]);
+				if (identical)
 				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = RLEFRAME;
+					mFrame->mFrameType = SAMEFRAME;
+					mFrame->mFrameData = 0;
+					mFrame->mFrameDataSize = 0;
+					mFrame->mSpans = 0;
 					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				}
-				else
-				{
-					delete[] data;
+					return;
 				}
 			}
-		}
 
-		if (gExtendedBlocks)
-		{
-			if (gSlowBlocks)
+			if (gExtendedBlocks && gUseSingle)
 			{
-				if (gUseLZ4 && (gAggressive || !mPrev)) // LZ block that doesn't need previous frames
+				int allsingle = 1;
+				for (int i = 0; allsingle && i < pixels; i++)
+					allsingle = (mFrame->mIndexPixels[i] == mFrame->mIndexPixels[0]);
+				if (allsingle)
+				{
+					mFrame->mFrameType = ONECOLOR;
+					mFrame->mFrameData = new unsigned char[1];
+					mFrame->mFrameDataSize = 1;
+					mFrame->mFrameData[0] = mFrame->mIndexPixels[0];
+					mFrame->mSpans = 0;
+					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+					return;
+				}
+			}
+
+			unsigned char* data = 0;
+			int len = 0;
+			mFrame->mFrameData = 0;
+			mFrame->mFrameDataSize = 0xffffff;
+
+			if (gClassicBlocks)
+			{
+				mFrame->mFrameData = new unsigned char[pixels * 2];
+				mFrame->mFrameDataSize = mHeader.mWidth * mHeader.mHeight;
+				memcpy(mFrame->mFrameData, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+				mFrame->mFrameType = FLI_COPY;
+				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+
+				if (gUseRLE)
 				{
 					data = new unsigned char[pixels * 2];
-					int spans = 0;
-					len = encodeLZ4Frame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
-					if (gVerify) if (len > pixels) printf("overlong Lz4 %d +%d\n", len, len - pixels);
-
+					len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+					mFrame->mSpans = 0;
+					if (gVerify) if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
 					if (len < mFrame->mFrameDataSize)
 					{
 						delete[] mFrame->mFrameData;
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = LZ4;
-						mFrame->mSpans = spans;
+						mFrame->mFrameType = RLEFRAME;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -595,93 +573,24 @@ public:
 					}
 				}
 			}
-		}
 
-		if (mPrev)
-		{
 			if (gExtendedBlocks)
 			{
 				if (gSlowBlocks)
 				{
-					if (gUseLZ1b && gAggressive)
+					if (gUseLZ4 && (gAggressive || !mPrev)) // LZ block that doesn't need previous frames
 					{
 						data = new unsigned char[pixels * 2];
 						int spans = 0;
-						len = encodeLZ1bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
-						if (gVerify) if (len > pixels) printf("overlong Lz1b %d +%d\n", len, len - pixels);
+						len = encodeLZ4Frame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+						if (gVerify) if (len > pixels) printf("overlong Lz4 %d +%d\n", len, len - pixels);
 
 						if (len < mFrame->mFrameDataSize)
 						{
 							delete[] mFrame->mFrameData;
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ1B;
-							mFrame->mSpans = spans;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
-					if (gUseLZ5)
-					{
-						data = new unsigned char[pixels * 2];
-						int spans = 0;
-						len = encodeLZ5Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
-						if (gVerify) if (len > pixels) printf("overlong Lz5 %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ5;
-							mFrame->mSpans = spans;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
-					if (gUseLZ6 && gAggressive)
-					{
-						data = new unsigned char[pixels * 2];
-						int spans = 0;
-						len = encodeLZ6Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
-						if (gVerify) if (len > pixels) printf("overlong Lz6 %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ6;
-							mFrame->mSpans = spans;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
-					if (gUseLZ3C && gAggressive)
-					{
-						data = new unsigned char[pixels * 4];
-						int spans = 0;
-						len = encodeLZ3CFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
-						if (gVerify) if (len > pixels) printf("overlong Lz3c %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ3C;
+							mFrame->mFrameType = LZ4;
 							mFrame->mSpans = spans;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
@@ -691,55 +600,153 @@ public:
 						}
 					}
 				}
-
 			}
 
-			if (gClassicBlocks)
+			if (mPrev)
 			{
-				if (gUseDelta8Frame)
+				if (gExtendedBlocks)
 				{
-					data = new unsigned char[pixels * 2];
-					len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
+					if (gSlowBlocks)
+					{
+						if (gUseLZ1b && gAggressive)
+						{
+							data = new unsigned char[pixels * 2];
+							int spans = 0;
+							len = encodeLZ1bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+							if (gVerify) if (len > pixels) printf("overlong Lz1b %d +%d\n", len, len - pixels);
 
-					if (len < mFrame->mFrameDataSize)
-					{
-						delete[] mFrame->mFrameData;
-						mFrame->mFrameData = data;
-						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = DELTA8FRAME;
-						mFrame->mSpans = 0;
-						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-					}
-					else
-					{
-						delete[] data;
+							if (len < mFrame->mFrameDataSize)
+							{
+								delete[] mFrame->mFrameData;
+								mFrame->mFrameData = data;
+								mFrame->mFrameDataSize = len;
+								mFrame->mFrameType = LZ1B;
+								mFrame->mSpans = spans;
+								if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+							}
+							else
+							{
+								delete[] data;
+							}
+						}
+
+						if (gUseLZ5)
+						{
+							data = new unsigned char[pixels * 2];
+							int spans = 0;
+							len = encodeLZ5Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+							if (gVerify) if (len > pixels) printf("overlong Lz5 %d +%d\n", len, len - pixels);
+
+							if (len < mFrame->mFrameDataSize)
+							{
+								delete[] mFrame->mFrameData;
+								mFrame->mFrameData = data;
+								mFrame->mFrameDataSize = len;
+								mFrame->mFrameType = LZ5;
+								mFrame->mSpans = spans;
+								if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+							}
+							else
+							{
+								delete[] data;
+							}
+						}
+
+						if (gUseLZ6 && gAggressive)
+						{
+							data = new unsigned char[pixels * 2];
+							int spans = 0;
+							len = encodeLZ6Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+							if (gVerify) if (len > pixels) printf("overlong Lz6 %d +%d\n", len, len - pixels);
+
+							if (len < mFrame->mFrameDataSize)
+							{
+								delete[] mFrame->mFrameData;
+								mFrame->mFrameData = data;
+								mFrame->mFrameDataSize = len;
+								mFrame->mFrameType = LZ6;
+								mFrame->mSpans = spans;
+								if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+							}
+							else
+							{
+								delete[] data;
+							}
+						}
+
+						if (gUseLZ3C && gAggressive)
+						{
+							data = new unsigned char[pixels * 4];
+							int spans = 0;
+							len = encodeLZ3CFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+							if (gVerify) if (len > pixels) printf("overlong Lz3c %d +%d\n", len, len - pixels);
+
+							if (len < mFrame->mFrameDataSize)
+							{
+								delete[] mFrame->mFrameData;
+								mFrame->mFrameData = data;
+								mFrame->mFrameDataSize = len;
+								mFrame->mFrameType = LZ3C;
+								mFrame->mSpans = spans;
+								if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+							}
+							else
+							{
+								delete[] data;
+							}
+						}
 					}
 				}
 
-				if (gUseDelta16Frame)
+				if (gClassicBlocks)
 				{
-					data = new unsigned char[pixels * 2];
-					len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
+					if (gUseDelta8Frame)
+					{
+						data = new unsigned char[pixels * 2];
+						len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
 
-					if (len < mFrame->mFrameDataSize)
-					{
-						delete[] mFrame->mFrameData;
-						mFrame->mFrameData = data;
-						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = DELTA16FRAME;
-						mFrame->mSpans = 0;
-						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = DELTA8FRAME;
+							mFrame->mSpans = 0;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
 					}
-					else
+
+					if (gUseDelta16Frame)
 					{
-						delete[] data;
+						data = new unsigned char[pixels * 2];
+						len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
+						if (gVerify) if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
+
+						if (len < mFrame->mFrameDataSize)
+						{
+							delete[] mFrame->mFrameData;
+							mFrame->mFrameData = data;
+							mFrame->mFrameDataSize = len;
+							mFrame->mFrameType = DELTA16FRAME;
+							mFrame->mSpans = 0;
+							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
+						}
+						else
+						{
+							delete[] data;
+						}
 					}
 				}
 			}
+			minspan++;
 		}
-	}
+		while (mFrame->mSpans > gSpanGoal && mFrame->mFrameDataSize < gMaxFrameSize);
+	} 
 };
 
 void encode(const FliHeader& header)
@@ -1012,30 +1019,32 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY, ANALYZE };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY, ANALYZE, SPANGOAL, MAXFRAMESIZE };
 const option::Descriptor usage[] =
 {
-	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename inputfilemask [options]\n\nOptions:"},
-	{ HELP,			0, "h", "help", option::Arg::None,			 " -h --help\t Print usage and exit"},
-	{ FLC,			0, "f", "flc", option::Arg::None,			 " -f --flc\t Output standard FLC format (default: use flx)"},
-	{ FLX,			0, "x", "flx", option::Arg::None,			 " -x --flx\t Output nextfli FLX format (default: use flx)"},
-	{ GIF,			0, "g", "gif", option::Arg::None,			 " -g --gif\t Output GIF format (default: use flx)"},
-	{ QUICK,		0, "q", "quick", option::Arg::None,			 " -q --quick\t Compress faster, bigger files (default: don't)"},
-	{ HALFRES,      0, "l", "halfres", option::Arg::None,        " -l --halfres\t Reduce output resolution to half x, half y (default: don't)"},
-	{ DITHER,       0, "d", "dither", option::Arg::None,         " -d --dither\t Use ordered dither (default: don't)"},
-	{ FASTSCALE,    0, "p", "fastscale", option::Arg::None,      " -p --fastscale\t Use fast image scaling (default: don't)"},
-	{ VERIFY,       0, "v", "verify", option::Arg::None,         " -v --verify\tVerify encoding (default: don't)"},
-	{ THREADS,      0, "t", "threads", option::Arg::Optional,    " -t --threads\tNumber of threads to use (default: num of logical cores)"},
-	{ FRAMEDELAY,   0, "r", "framedelay", option::Arg::Optional, " -r --framedelay\tFrame delay 1=50hz, 2=25hz, 3=16.7hz 4=12.5hz (default: 4)"},
-	{ INFO,         0, "i", "info", option::Arg::Optional,       " -i --info\t Output frame info log to file (default: don't)"},
-	{ MINSPAN,      0, "m", "minspan", option::Arg::Optional,    " -m --minspan\t Set minimum span. Trade file size for faster decode. (default: 0)"},
-	{ LOSSY,        0, "L", "lossy", option::Arg::Optional,      " -L --lossy\t Don't update pixels with manhattan rgb distance x (default: 0)"},
-	{ KEYFRAMES,    0, "K", "keyframes", option::Arg::Optional,  " -K --keyframes\t Don't apply lossy filter every n frames (default: inf)"},
-	{ PALWIDTH,     0, "c", "colors", option::Arg::Optional,     " -c --colors\t Number of colors in palette. (default: 256)"},
-	{ CHUNKYX,      0, "X", "chunkyx", option::Arg::Optional,    " -X --chunkyx\t Pixels per pixel horizontally (default: 1)"},
-	{ CHUNKYY,      0, "Y", "chunkyy", option::Arg::Optional,    " -Y --chunkyy\t Pixels per pixel vertically (default: 1)"},
-	{ ANALYZE,      0, "a", "analyze", option::Arg::None,        " -a --analyze\t Analyze existing file."},
-	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flx \"frames*.png\" -r3 -d -iframelog.txt"},
+	{ UNKNOWN,		0, "", "",	option::Arg::None,				  "USAGE: nextfli outputfilename inputfilemask [options]\n\nOptions:"},
+	{ HELP,			0, "h", "help", option::Arg::None,			  " -h --help\t Print usage and exit"},
+	{ FLC,			0, "f", "flc", option::Arg::None,			  " -f --flc\t Output standard FLC format (default: use flx)"},
+	{ FLX,			0, "x", "flx", option::Arg::None,			  " -x --flx\t Output nextfli FLX format (default: use flx)"},
+	{ GIF,			0, "g", "gif", option::Arg::None,			  " -g --gif\t Output GIF format (default: use flx)"},
+	{ QUICK,		0, "q", "quick", option::Arg::None,			  " -q --quick\t Compress faster, bigger files (default: don't)"},
+	{ HALFRES,      0, "l", "halfres", option::Arg::None,         " -l --halfres\t Reduce output resolution to half x, half y (default: don't)"},
+	{ DITHER,       0, "d", "dither", option::Arg::None,          " -d --dither\t Use ordered dither (default: don't)"},
+	{ FASTSCALE,    0, "p", "fastscale", option::Arg::None,       " -p --fastscale\t Use fast image scaling (default: don't)"},
+	{ VERIFY,       0, "v", "verify", option::Arg::None,          " -v --verify\tVerify encoding (default: don't)"},
+	{ THREADS,      0, "t", "threads", option::Arg::Optional,     " -t --threads\tNumber of threads to use (default: num of logical cores)"},
+	{ FRAMEDELAY,   0, "r", "framedelay", option::Arg::Optional,  " -r --framedelay\tFrame delay 1=50hz, 2=25hz, 3=16.7hz 4=12.5hz (default: 4)"},
+	{ INFO,         0, "i", "info", option::Arg::Optional,        " -i --info\t Output frame info log to file (default: don't)"},
+	{ MINSPAN,      0, "m", "minspan", option::Arg::Optional,     " -m --minspan\t Set minimum span. Trade file size for faster decode. (default: 0)"},
+	{ LOSSY,        0, "L", "lossy", option::Arg::Optional,       " -L --lossy\t Don't update pixels with manhattan rgb distance x (default: 0)"},
+	{ KEYFRAMES,    0, "K", "keyframes", option::Arg::Optional,   " -K --keyframes\t Don't apply lossy filter every n frames (default: inf)"},
+	{ PALWIDTH,     0, "c", "colors", option::Arg::Optional,      " -c --colors\t Number of colors in palette. (default: 256)"},
+	{ CHUNKYX,      0, "X", "chunkyx", option::Arg::Optional,     " -X --chunkyx\t Pixels per pixel horizontally (default: 1)"},
+	{ CHUNKYY,      0, "Y", "chunkyy", option::Arg::Optional,     " -Y --chunkyy\t Pixels per pixel vertically (default: 1)"},
+	{ ANALYZE,      0, "a", "analyze", option::Arg::None,         " -a --analyze\t Analyze existing file. Does not generate animation."},
+	{ SPANGOAL,     0, "G", "spangoal", option::Arg::Optional,    " -G --spangoal\t Set span goal. Grows file size. Heavy. (default: 0)"},
+	{ MAXFRAMESIZE, 0, "S", "maxframesize", option::Arg::Optional," -S --maxframesize\t Maximum frame size. Use with -G. (default:8192)"},
+	{ UNKNOWN,      0, "", "", option::Arg::None,				  "Example:\n  nextfli test.flx \"frames*.png\" -r3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
 };
 
@@ -1102,7 +1111,7 @@ int main(int parc, char* pars[])
 		if (options[MINSPAN])
 		{
 			if (options[MINSPAN].arg != 0 && options[MINSPAN].arg[0])
-				gMinSpan = atoi(options[MINSPAN].arg);
+				gGlobalMinSpan = atoi(options[MINSPAN].arg);
 			else
 			{
 				printf("Invalid min span. Example: -m20\n");
@@ -1174,6 +1183,26 @@ int main(int parc, char* pars[])
 			else
 			{
 				printf("Invalid chunky y. Example: -Y3\n");
+				return 0;
+			}
+		}
+		if (options[SPANGOAL])
+		{
+			if (options[SPANGOAL].arg != 0 && options[SPANGOAL].arg[0])
+				gSpanGoal = atoi(options[SPANGOAL].arg);
+			else
+			{
+				printf("Invalid span goal. Example: -G600\n");
+				return 0;
+			}
+		}
+		if (options[MAXFRAMESIZE])
+		{
+			if (options[MAXFRAMESIZE].arg != 0 && options[MAXFRAMESIZE].arg[0])
+				gSpanGoal = atoi(options[MAXFRAMESIZE].arg);
+			else
+			{
+				printf("Invalid max frame size. Example: -S32768\n");
 				return 0;
 			}
 		}

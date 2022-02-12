@@ -146,29 +146,16 @@ struct Frame
 	}
 };
 
-extern int gMinSpan;
 
 int encodeDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int width, int height);
 int encodeDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int width, int height);
 int encodeRLEFrame(unsigned char* aRLEframe, unsigned char* aIndexPixels, int width, int height);
 
-int encodeLZ3Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ2bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int& spans);
-int encodeLinearDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLinearRLE16Frame(unsigned char* data, unsigned char* src, int pixels);
-int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels);
-int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, int pixels, int& spans);
-int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int& spans);
-int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int& spans);
-
-int encodeLZ3BFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int &spans);
-int encodeLZ3DFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ3EFrame(unsigned char* data, unsigned char* aFrame, int pixels);
+int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int& spans);
+int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, int pixels, int minspan, int& spans);
+int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int& spans);
+int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int& spans);
+int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int &spans);
 
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight);
 
