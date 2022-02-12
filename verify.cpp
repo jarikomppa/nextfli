@@ -465,10 +465,11 @@ int decode_lz2(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	return idx;
 }
 
-int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
 {
 	int idx = 0;
 	int ofs = 0;
+	int spans = 0, lz1 = 0, rle = 0, lit = 0, lz2 = 0;
 	while (ofs < pixels)
 	{
 		int runlen = (signed char)data[idx++];
@@ -478,6 +479,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			runofs |= data[idx++] << 8;
 			memcpy(buf + ofs, prev + runofs, runlen);
 			ofs += runlen;
+			spans++; lz1++;
 		}
 		else
 		{
@@ -485,6 +487,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			unsigned char c = data[idx++];
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
+			spans++; rle++;
 		}
 
 		if (ofs < pixels)
@@ -495,6 +498,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 				memcpy(buf + ofs, data + idx, copylen);
 				ofs += copylen;
 				idx += copylen;
+				spans++; lit++;
 			}
 			else
 			{
@@ -503,10 +507,12 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 				runofs |= data[idx++] << 8;
 				memcpy(buf + ofs, prev + runofs, runlen);
 				ofs += runlen;
+				spans++; lz2++;
 			}
 		}
 	}
 	if (ofs > pixels) printf("wrote over buffer lz1b %d %d\n", ofs, pixels);
+	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
 
@@ -607,10 +613,11 @@ void mymemcpy(unsigned char* dst, unsigned char* src, int count)
 		*dst++ = *src++;
 }
 
-int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels)
+int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
 {
 	int idx = 0;
 	int ofs = 0;
+	int spans = 0, lz1 = 0, rle = 0, lit = 0, lz2 = 0;
 	while (ofs < pixels)
 	{
 		int runlen = (signed char)data[idx++];
@@ -626,6 +633,8 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 			mymemcpy(buf + ofs, buf + runofs, runlen);
 			
 			ofs += runlen;
+
+			spans++; lz1++;
 		}
 		else
 		{
@@ -641,6 +650,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 			unsigned char c = data[idx++];
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
+			spans++; rle++;
 		}
 
 		if (ofs < pixels)
@@ -651,6 +661,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 				memcpy(buf + ofs, data + idx, copylen);
 				ofs += copylen;
 				idx += copylen;
+				spans++; lit++;
 			}
 			else
 			{
@@ -667,14 +678,16 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 				copyofs |= data[idx++] << 8;
 				mymemcpy(buf + ofs, buf + copyofs, copylen);
 				ofs += copylen;
+				spans++; lz2++;
 			}
 		}
 	}
 	if (ofs > pixels) printf("wrote over buffer lz4 %d %d\n", ofs, pixels);
+	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
 
-int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
 {
 	/*
 ; op <=0 [-op][runvalue] or [-128][2 byte size][runvalue] - RLE
@@ -684,6 +697,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 */
 	int idx = 0;
 	int ofs = 0;
+	int spans = 0, lz1 = 0, rle = 0, lit = 0, lz2 = 0;
 	while (ofs < pixels)
 	{
 		int runlen = (signed char)data[idx++];
@@ -699,6 +713,8 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			mymemcpy(buf + ofs, prev + runofs, runlen);
 
 			ofs += runlen;
+
+			spans++; lz1++;
 		}
 		else
 		{
@@ -714,6 +730,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			unsigned char c = data[idx++];
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
+			spans++; rle++;
 		}
 
 		if (ofs < pixels)
@@ -729,6 +746,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				memcpy(buf + ofs, data + idx, copylen);
 				ofs += copylen;
 				idx += copylen;
+				spans++; lit++;
 			}
 			else
 			{
@@ -745,14 +763,16 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				copyofs |= data[idx++] << 8;
 				mymemcpy(buf + ofs, prev + copyofs, copylen);
 				ofs += copylen;
+				spans++; lz2++;
 			}
 		}
 	}
 	if (ofs > pixels) printf("wrote over buffer lz5 %d %d\n", ofs, pixels);
+	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
 
-int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
 {
 	/*
 ; op <=0 [-op][runvalue] or [-128][2 byte size][runvalue] - RLE
@@ -762,6 +782,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	*/
 	int idx = 0;
 	int ofs = 0;
+	int spans = 0, lz1 = 0, rle = 0, lit = 0, lz2 = 0;
 	while (ofs < pixels)
 	{
 		int runlen = (signed char)data[idx++];
@@ -777,6 +798,8 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			mymemcpy(buf + ofs, prev + runofs, runlen);
 
 			ofs += runlen;
+
+			spans++; lz1++;
 		}
 		else
 		{
@@ -792,6 +815,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			unsigned char c = data[idx++];
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
+			spans++; rle++;
 		}
 
 		if (ofs < pixels)
@@ -807,6 +831,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				memcpy(buf + ofs, data + idx, copylen);
 				ofs += copylen;
 				idx += copylen;
+				spans++; lit++;
 			}
 			else
 			{
@@ -823,14 +848,16 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				copyofs |= data[idx++] << 8;
 				mymemcpy(buf + ofs, buf + copyofs, copylen);
 				ofs += copylen;
+				spans++; lz2++;
 			}
 		}
 	}
 	if (ofs > pixels) printf("wrote over buffer lz6 %d %d\n", ofs, pixels);
+	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
 
-int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels)
+int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels, FILE * lf = 0)
 {
 	/*
 ; op >  0 [127][2 byte len] or [op][current ofs +/- signed byte] copy from previous
@@ -840,6 +867,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 	*/
 	int idx = 0;
 	int ofs = 0;
+	int spans = 0, lz1 = 0, rle = 0, lz2 = 0, lit = 0;
 	while (ofs < pixels)
 	{
 		int runlen = (signed char)data[idx++];
@@ -854,6 +882,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			mymemcpy(buf + ofs, prev + runofs, runlen);
 
 			ofs += runlen;
+			spans++; lz1++;
 		}
 		else
 		{
@@ -869,6 +898,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			unsigned char c = data[idx++];
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
+			spans++; rle++;
 		}
 
 		if (ofs < pixels)
@@ -885,6 +915,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 				mymemcpy(buf + ofs, prev + runofs, runlen);
 
 				ofs += runlen;
+				spans++; lz2++;
 			}
 			else
 			{
@@ -900,10 +931,12 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 				memcpy(buf + ofs, data + idx, runlen);
 				ofs += runlen;
 				idx += runlen;
+				spans++; lit++;
 			}
 		}
 	}
 	if (ofs > pixels) printf("wrote over buffer lz3c %d %d\n", ofs, pixels);
+	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
 
@@ -1015,9 +1048,10 @@ int readword(unsigned char* &f)
 	return a + (b << 8);
 }
 
-void verifyfile(const char* fn)
+void verifyfile(const char* fn, const char* logfilename)
 {
 	FILE* f = fopen(fn, "rb");
+	FILE* lf = fopen(logfilename, "w");
 	if (!f)
 	{
 		printf("Can't verify \"%s\" - file not found\n", fn);
@@ -1030,10 +1064,10 @@ void verifyfile(const char* fn)
 	unsigned char* p = data;
 	fread(data, 1, len, f);
 	fclose(f);
-	if (readbyte(p) != 'N' ||
+	if (readbyte(p) != 'F' ||
+		readbyte(p) != 'L' ||
 		readbyte(p) != 'X' ||
-		readbyte(p) != 'F' ||
-		readbyte(p) != 'L')
+		readbyte(p) != '!')
 	{
 		printf("Header tag wrong in \"%s\"\n", fn);
 		delete[] data;
@@ -1041,6 +1075,10 @@ void verifyfile(const char* fn)
 	}
 	int frames = readword(p);
 	int speed = readword(p);
+	int config = readword(p);
+	int drawoffset = readword(p);
+	int loopoffset = readword(p);
+	
 	if (frames == 0 || speed == 0)
 	{
 		printf("%d frames, %d speed in \"%s\"\n", frames, speed, fn);
@@ -1059,61 +1097,107 @@ void verifyfile(const char* fn)
 	int pixels = 192 * 256;
 	unsigned char* f1 = new unsigned char[pixels];
 	unsigned char* f2 = new unsigned char[pixels];
-	
-	printf("Verifying \"%s\", %d frames, %d speed\n", fn, frames, speed);
+	memset(f1, 0, pixels);
+	memset(f2, 0, pixels);
 
-	for (int frame = 0; frame < frames; frame++)
+	printf("Verifying \"%s\", %d frames, %d speed, %d config, %d drawoffs, %d loopoffs\n", fn, frames, speed, config, drawoffset, loopoffset);
+
+	int dstofs = 0, srcofs = 0;
+	int frame = 0;
+	while ((p-data) < len && frame < frames)
 	{
 		int ftype = readbyte(p);
-		int flen = readword(p);
+		int flen = 0;
+		if (ftype != FLX_NEXT && ftype != FLX_SUBFRAME)
+			flen = readword(p);
+		if (lf) fprintf(lf, "%5d:", frame);
 		switch (ftype)
 		{
-		case SAMEFRAME:
-			memcpy(f1, f2, pixels);
+		case FLX_SUBFRAME:
+			if (lf) fprintf(lf, "LFX_SUBFRAME ");
 			break;
-		case BLACKFRAME:
-			memset(f1, 0, pixels);
+		case FLX_NEXT:
+			if (lf) fprintf(lf, "LFX_NEXT     ");
 			break;
-		case ONECOLOR:
-			memset(f1, readbyte(p), pixels);
+		case FLX_SAME:
+			if (lf) fprintf(lf, "LFX_SAME     ");
+			memcpy(f1 + dstofs, f2 + srcofs, pixels);
 			break;
-		case LZ1B:
-			p += decode_lz1b(f1, f2, p, flen, pixels);
+		case FLX_BLACK:
+			if (lf) fprintf(lf, "LFX_BLACK    ");
+			memset(f1 + dstofs, 0, pixels);
 			break;
-		case LZ4:
-			p += decode_lz4(f1, p, flen, pixels);
+		case FLX_ONE:
+			if (lf) fprintf(lf, "LFX_ONE      ");
+			memset(f1 + dstofs, readbyte(p), pixels);
 			break;
-		case LZ5:
-			p += decode_lz5(f1, f2, p, flen, pixels);
+		case FLX_LZ1B:
+			if (lf) fprintf(lf, "LFX_LZ1B     ");
+			p += decode_lz1b(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
 			break;
-		case LZ6:
-			p += decode_lz6(f1, f2, p, flen, pixels);
+		case FLX_LZ4:
+			if (lf) fprintf(lf, "LFX_LZ4      ");
+			p += decode_lz4(f1 + dstofs, p, flen, pixels, lf);
 			break;
-		case LZ3C:
-			p += decode_lz3c(f1, f2, p, flen, pixels);
+		case FLX_LZ5:
+			if (lf) fprintf(lf, "LFX_LZ5      ");
+			p += decode_lz5(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
+			break;
+		case FLX_LZ6:
+			if (lf) fprintf(lf, "LFX_LZ6      ");
+			p += decode_lz6(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
+			break;
+		case FLX_LZ3C:
+			if (lf) fprintf(lf, "LFX_LZ3C     ");
+			p += decode_lz3c(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
 			break;
 		default:
 			assert(0); // verify not implemented
 		}
-		int hash1 = readbyte(p);
-		int hash2 = readbyte(p);
+		if (lf) fprintf(lf, "\n");
 
-		unsigned char sum1 = 0;
-		unsigned char sum2 = 0;
-		for (int i = 0; i < pixels; i++)
+		if (ftype == FLX_SUBFRAME)
 		{
-			sum1 ^= f1[i];
-			sum2 += sum1;
+			dstofs += 160 * 256;
+			srcofs += 16 * 1024;
 		}
-		if (sum1 != hash1 || sum2 != hash2)
+		else
+		if (ftype == FLX_NEXT)
 		{
-			printf("Frame hash mismatch - frame %d, \"%s\" - frametype %d - %d,%d vs %d,%d\n", frame, fn, ftype, sum1, sum2, hash1, hash2);
+			unsigned char* t = f1;
+			f1 = f2;
+			f2 = t;
+			srcofs = 0;
+			dstofs = 0;
+			frame++;
 		}
+		else
+		{
+			int hash1 = readbyte(p);
+			int hash2 = readbyte(p);
 
-		unsigned char* t = f1;
-		f1 = f2;
-		f2 = t;
+			unsigned char sum1 = 0;
+			unsigned char sum2 = 0;
+			for (int i = 0; i < pixels; i++)
+			{
+				sum1 ^= f1[i];
+				sum2 += sum1;
+			}
+			if (sum1 != hash1 || sum2 != hash2)
+			{
+				printf("Frame hash mismatch - frame %d, \"%s\" - frametype %d - %d,%d vs %d,%d\n", frame, fn, ftype, sum1, sum2, hash1, hash2);
+			}
+		}
+	}
+	if (frame < frames)
+	{
+		printf("didn't read all frames?\n");
+	}
+	if ((p - data) != len)
+	{
+		printf("didn't reach end of file?\n");
 	}
 	delete[] data;
 	printf("Verify done.\n");
+	if (lf) fclose(lf);
 }

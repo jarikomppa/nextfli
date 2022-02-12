@@ -1,3 +1,18 @@
+
+enum FLXBLOCKS
+{
+	FLX_NEXT = 0,
+	FLX_SAME = 3,
+	FLX_BLACK = 6,
+	FLX_ONE = 9,
+	FLX_LZ1B = 12,
+	FLX_LZ4 = 15,
+	FLX_LZ5 = 18,
+	FLX_LZ6 = 21,
+	FLX_LZ3C = 24,
+	FLX_SUBFRAME = 27,
+};
+
 enum FRAMETYPE
 {
 	SAMEFRAME = 1,
@@ -167,4 +182,4 @@ int skiplength16(unsigned char* cdata, unsigned char* cprev, int max);
 int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs, int max);
 int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, signed char& runofs, int max);
 
-void verifyfile(const char* fn);
+void verifyfile(const char* fn, const char * logfilename);

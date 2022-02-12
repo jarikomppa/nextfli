@@ -1077,12 +1077,12 @@ void output_flc(FliHeader& header, FILE* outfile)
 		int chunktype = 0;
 		switch (walker->mFrameType)
 		{
-		case SAMEFRAME:chunktype = 0; break;
-		case BLACKFRAME:chunktype = 13; break;
-		case RLEFRAME:chunktype = 15; break;
-		case DELTA8FRAME: chunktype = 12; break;
-		case DELTA16FRAME: chunktype = 7; break;
-		case FLI_COPY: chunktype = 16; break;
+		case SAMEFRAME:    chunktype = 0;  printf("s"); break;
+		case BLACKFRAME:   chunktype = 13; printf("b"); break;
+		case RLEFRAME:     chunktype = 15; printf("r"); break;
+		case DELTA8FRAME:  chunktype = 12; printf("d"); break;
+		case DELTA16FRAME: chunktype = 7;  printf("D"); break;
+		case FLI_COPY:     chunktype = 16; printf("c"); break;
 		default: printf("?!?\n");
 		}
 		writechunk(outfile, walker, chunktype, frames);
@@ -1090,7 +1090,7 @@ void output_flc(FliHeader& header, FILE* outfile)
 		walker = walker->mNext;
 		frames++;
 	}
-	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total / 1024, total / (1024 * 1024), ftell(outfile) - total);
+	printf("\n\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total / 1024, total / (1024 * 1024), ftell(outfile) - total);
 	printf("Compression ratio %3.3f%%, %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), total / frames);
 
 	header.mSize = ftell(outfile);
@@ -1137,13 +1137,20 @@ void output_flx(FliHeader& header, FILE* outfile)
 		unsigned int tag;
 		unsigned short frames;
 		unsigned short speed;
+		unsigned short config;
+		unsigned short drawoffset;
+		unsigned short loopoffset;
+
 		unsigned char pal[2 * 256];
 	} hdr;
 #pragma pack(pop)
 	memset(&hdr, 0, sizeof(hdr));
-	hdr.tag = 0x4c46584e; // 'NXFL'
+	hdr.tag = 0x21584c46; // 'FLX!'
 	hdr.frames = header.mFrames;
 	hdr.speed = gFramedelay;
+	hdr.config = 0; // graphics mode
+	hdr.drawoffset = 0; // offset to start drawing from
+	hdr.loopoffset = 0; // offset to 2nd frame (or 1st if there's no loop frame)
 	for (int i = 0; i < 256; i++)
 	{
 		int c;
@@ -1165,38 +1172,25 @@ void output_flx(FliHeader& header, FILE* outfile)
 		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff };
 	int total = 0;
 	int frames = 0;
+
 	while (walker)
 	{
+		if (frames == 1)
+			hdr.loopoffset = (unsigned short)ftell(outfile); // TODO: implement loop frame
 		int chunktype = 0;
 		switch (walker->mFrameType)
 		{
-		case SAMEFRAME:chunktype = 0;  printf("s"); break;
-		case BLACKFRAME:chunktype = 13;  printf("b"); break;
-		case RLEFRAME:chunktype = 15; printf("r"); break;
-		case DELTA8FRAME: chunktype = 12; printf("d"); break;
-		case DELTA16FRAME: chunktype = 7;  printf("D"); break;
-		case FLI_COPY: chunktype = 16; printf("c"); break;
-			// extended blocks:
-		case ONECOLOR: chunktype = 101;  printf("o"); break;
-		case LINEARRLE8: chunktype = 102; printf("l"); break;
-		case LINEARRLE16: chunktype = 103; printf("L"); break;
-		case LINEARDELTA8: chunktype = 104; printf("e"); break;
-		case LINEARDELTA16: chunktype = 105; printf("E"); break;
-		case LZ1: chunktype = 106; printf("1"); break;
-		case LZ2: chunktype = 107; printf("2"); break;
-		case LZ3: chunktype = 108; printf("3"); break;
-		case LZ1B: chunktype = 109; printf("9"); break;
-		case LZ2B: chunktype = 110; printf("0"); break;
-		case LZ4: chunktype = 111; printf("4"); break;
-		case LZ5: chunktype = 112; printf("5"); break;
-		case LZ6: chunktype = 113; printf("6"); break;
-		case LZ3B: chunktype = 114; printf("x"); break;
-		case LZ3C: chunktype = 115; printf("y"); break;
-		case LZ3D: chunktype = 116; printf("z"); break;
-		case LZ3E: chunktype = 117; printf("w"); break;
-		default: printf("?!?\n");
+			case SAMEFRAME: chunktype = FLX_SAME;  printf("h"); break;
+			case BLACKFRAME:chunktype = FLX_BLACK; printf("s"); break;
+			case ONECOLOR:  chunktype = FLX_ONE;   printf("n"); break;
+			case LZ1B:      chunktype = FLX_LZ1B;  printf("o"); break;
+			case LZ4:       chunktype = FLX_LZ4;   printf("a"); break;
+			case LZ5:       chunktype = FLX_LZ5;   printf("e"); break;
+			case LZ6:       chunktype = FLX_LZ6;   printf("t"); break;
+			case LZ3C:      chunktype = FLX_LZ3C;  printf("i"); break;
+			default: printf("?!?\n");
 		}
-		fputc(walker->mFrameType, outfile);
+		fputc(chunktype, outfile);
 		unsigned short ds = walker->mFrameDataSize;
 		fwrite(&ds, 1, 2, outfile);
 		if (ds)
@@ -1208,38 +1202,25 @@ void output_flx(FliHeader& header, FILE* outfile)
 
 		if (walker->mFrameDataSize > framemaxsize[walker->mFrameType]) framemaxsize[walker->mFrameType] = walker->mFrameDataSize;
 		if (walker->mFrameDataSize < frameminsize[walker->mFrameType]) frameminsize[walker->mFrameType] = walker->mFrameDataSize;
+
 		framecounts[walker->mFrameType]++;
 		total += walker->mFrameDataSize;
 		walker = walker->mNext;
 		frames++;
+
+		fputc(FLX_NEXT, outfile);
 	}
 	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total / 1024, total / (1024 * 1024), ftell(outfile) - total);
 	printf("Compression ratio %3.3f%%, %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), total / frames);
 	printf("\nBlock types:\n");
-	if (framecounts[1]) printf("s sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
-	if (framecounts[2]) printf("b blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);
-	if (framecounts[3]) printf("r rleframe      %5d (%5d -%5d bytes)\n", framecounts[3], frameminsize[3], framemaxsize[3]);
-	if (framecounts[4]) printf("d delta8frame   %5d (%5d -%5d bytes)\n", framecounts[4], frameminsize[4], framemaxsize[4]);
-	if (framecounts[5]) printf("D delta16frame  %5d (%5d -%5d bytes)\n", framecounts[5], frameminsize[5], framemaxsize[5]);
-	if (framecounts[6]) printf("c copy          %5d (%5d -%5d bytes)\n", framecounts[6], frameminsize[6], framemaxsize[6]);
-	printf("-- extended blocks --\n");
-	if (framecounts[7]) printf("o onecolor      %5d (%5d -%5d bytes)\n", framecounts[7], frameminsize[7], framemaxsize[7]);
-	if (framecounts[8]) printf("l linearrle8    %5d (%5d -%5d bytes)\n", framecounts[8], frameminsize[8], framemaxsize[8]);
-	if (framecounts[9]) printf("L linearrle16   %5d (%5d -%5d bytes)\n", framecounts[9], frameminsize[9], framemaxsize[9]);
-	if (framecounts[10]) printf("e lineardelta8  %5d (%5d -%5d bytes)\n", framecounts[10], frameminsize[10], framemaxsize[10]);
-	if (framecounts[11]) printf("E lineardelta16 %5d (%5d -%5d bytes)\n", framecounts[11], frameminsize[11], framemaxsize[11]);
-	if (framecounts[12]) printf("1 lz scheme 1   %5d (%5d -%5d bytes)\n", framecounts[12], frameminsize[12], framemaxsize[12]);
-	if (framecounts[13]) printf("9 lz scheme 1b  %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
-	if (framecounts[14]) printf("2 lz scheme 2   %5d (%5d -%5d bytes)\n", framecounts[14], frameminsize[14], framemaxsize[14]);
-	if (framecounts[15]) printf("0 lz scheme 2b  %5d (%5d -%5d bytes)\n", framecounts[15], frameminsize[15], framemaxsize[15]);
-	if (framecounts[16]) printf("3 lz scheme 3   %5d (%5d -%5d bytes)\n", framecounts[16], frameminsize[16], framemaxsize[16]);
-	if (framecounts[17]) printf("4 lz scheme 4   %5d (%5d -%5d bytes)\n", framecounts[17], frameminsize[17], framemaxsize[17]);
-	if (framecounts[18]) printf("5 lz scheme 5   %5d (%5d -%5d bytes)\n", framecounts[18], frameminsize[18], framemaxsize[18]);
-	if (framecounts[19]) printf("6 lz scheme 6   %5d (%5d -%5d bytes)\n", framecounts[19], frameminsize[19], framemaxsize[19]);
-	if (framecounts[20]) printf("x lz scheme 3b  %5d (%5d -%5d bytes)\n", framecounts[20], frameminsize[20], framemaxsize[20]);
-	if (framecounts[21]) printf("y lz scheme 3c  %5d (%5d -%5d bytes)\n", framecounts[21], frameminsize[21], framemaxsize[21]);
-	if (framecounts[22]) printf("z lz scheme 3d  %5d (%5d -%5d bytes)\n", framecounts[22], frameminsize[22], framemaxsize[22]);
-	if (framecounts[23]) printf("w lz scheme 3e  %5d (%5d -%5d bytes)\n", framecounts[23], frameminsize[23], framemaxsize[23]);
+	if (framecounts[1]) printf("h sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
+	if (framecounts[2]) printf("s blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);
+	if (framecounts[7]) printf("n onecolor      %5d (%5d -%5d bytes)\n", framecounts[7], frameminsize[7], framemaxsize[7]);
+	if (framecounts[13]) printf("o lz scheme 1b  %5d (%5d -%5d bytes)\n", framecounts[13], frameminsize[13], framemaxsize[13]);
+	if (framecounts[17]) printf("a lz scheme 4   %5d (%5d -%5d bytes)\n", framecounts[17], frameminsize[17], framemaxsize[17]);
+	if (framecounts[18]) printf("e lz scheme 5   %5d (%5d -%5d bytes)\n", framecounts[18], frameminsize[18], framemaxsize[18]);
+	if (framecounts[19]) printf("t lz scheme 6   %5d (%5d -%5d bytes)\n", framecounts[19], frameminsize[19], framemaxsize[19]);
+	if (framecounts[21]) printf("i lz scheme 3c  %5d (%5d -%5d bytes)\n", framecounts[21], frameminsize[21], framemaxsize[21]);
 
 	hdr.frames = frames;
 
@@ -1251,7 +1232,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, STD, EXT, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename inputfilemask [options]\n\nOptions:"},
@@ -1259,8 +1240,6 @@ const option::Descriptor usage[] =
 	{ FLC,			0, "f", "flc", option::Arg::None,			 " -f --flc\t Output standard FLC format (default: use flx)"},
 	{ FLX,			0, "x", "flx", option::Arg::None,			 " -x --flx\t Output nextfli FLX format (default: use flx)"},
 	{ GIF,			0, "g", "gif", option::Arg::None,			 " -g --gif\t Output GIF format (default: use flx)"},
-	{ STD,			0, "s", "std", option::Arg::None,			 " -s --std\t Use standard blocks (default: flc yes, flx no)"},
-	{ EXT,			0, "e", "ext", option::Arg::None,			 " -e --ext\t Use extended blocks (default: flc no, fli yes)"},
 	{ QUICK,		0, "q", "quick", option::Arg::None,			 " -q --quick\t Compress faster, bigger files (default: don't)"},
 	{ HALFRES,      0, "l", "halfres", option::Arg::None,        " -l --halfres\t Reduce output resolution to half x, half y (default: don't)"},
 	{ DITHER,       0, "d", "dither", option::Arg::None,         " -d --dither\t Use ordered dither (default: don't)"},
@@ -1320,8 +1299,6 @@ int main(int parc, char* pars[])
 
 	gThreads = std::thread::hardware_concurrency();
 
-	if (options[STD]) gClassicBlocks = 1;
-	if (options[EXT]) gExtendedBlocks = 1;
 	if (options[QUICK]) gAggressive = 0;
 	if (options[HALFRES]) gHalfRes = 1;
 	if (options[DITHER]) gDither = 1;
@@ -1468,28 +1445,15 @@ int main(int parc, char* pars[])
 		}
 	if (outfile) fclose(outfile);
 
-	if (options[INFO])
+
+	if (options[VERIFY] || options[INFO])
 	{
-		FILE* f = fopen(options[INFO].arg, "w");
-		Frame* walker = gRoot;
-		while (walker)
-		{
-			fprintf(f, "%d, %d", walker->mFrameType, walker->mFrameDataSize);
-			for (int i = 0; i < FRAMETYPE_MAX; i++)
-//				if (walker->mFrameSize[i])
-					fprintf(f, ", %d", walker->mFrameSize[i]);
-//				else
-//					fprintf(f, ", ");
-			fprintf(f, "\n");
-			walker = walker->mNext;
-		}
-		fclose(f);
-		printf("Frame info log written to %s\n", options[INFO].arg);
+		verifyfile(parse.nonOption(0), options[INFO] ? options[INFO].arg : 0);
 	}
 
-	if (options[VERIFY])
+	if (options[INFO])
 	{
-		verifyfile(parse.nonOption(0));
+		printf("Frame info log written to %s\n", options[INFO].arg);
 	}
 
 	auto end = std::chrono::steady_clock::now();
