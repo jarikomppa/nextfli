@@ -495,7 +495,7 @@ public:
 			mFrame->mFrameType = BLACKFRAME;
 			mFrame->mFrameData = 0;
 			mFrame->mFrameDataSize = 0;
-			mFrame->mFrameSize[mFrame->mFrameType] = mFrame->mFrameDataSize;
+			mFrame->mSpans = 0;
 			if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 			return;
 		}
@@ -511,7 +511,7 @@ public:
 				mFrame->mFrameType = SAMEFRAME;
 				mFrame->mFrameData = 0;
 				mFrame->mFrameDataSize = 0;
-				mFrame->mFrameSize[mFrame->mFrameType] = mFrame->mFrameDataSize;
+				mFrame->mSpans = 0;
 				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
@@ -528,7 +528,7 @@ public:
 				mFrame->mFrameData = new unsigned char[1];
 				mFrame->mFrameDataSize = 1;
 				mFrame->mFrameData[0] = mFrame->mIndexPixels[0];
-				mFrame->mFrameSize[mFrame->mFrameType] = mFrame->mFrameDataSize;
+				mFrame->mSpans = 0;
 				if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				return;
 			}
@@ -551,7 +551,7 @@ public:
 			{
 				data = new unsigned char[pixels * 2];
 				len = encodeRLEFrame(data, mFrame->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
-				mFrame->mFrameSize[RLEFRAME] = len;
+				mFrame->mSpans = 0;
 				if (gVerify) if (len > pixels) printf("overlong rle: %d +%d\n", len, len - pixels);
 				if (len < mFrame->mFrameDataSize)
 				{
@@ -575,13 +575,14 @@ public:
 				data = new unsigned char[pixels * 2];
 				len = encodeLinearRLE8Frame(data, mFrame->mIndexPixels, pixels);
 				if (gVerify) if (len > pixels) printf("overlong Lrle8 %d +%d\n", len, len - pixels);
-				mFrame->mFrameSize[LINEARRLE8] = len;
+
 				if (len < mFrame->mFrameDataSize)
 				{
 					delete[] mFrame->mFrameData;
 					mFrame->mFrameData = data;
 					mFrame->mFrameDataSize = len;
 					mFrame->mFrameType = LINEARRLE8;
+					mFrame->mSpans = 0;
 					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				}
 				else
@@ -595,13 +596,14 @@ public:
 				data = new unsigned char[pixels * 2];
 				len = encodeLinearRLE16Frame(data, (mFrame->mIndexPixels), pixels);
 				if (gVerify) if (len > pixels) printf("overlong Lrle16 %d +%d\n", len, len - pixels);
-				mFrame->mFrameSize[LINEARRLE16] = len;
+
 				if (len < mFrame->mFrameDataSize)
 				{
 					delete[] mFrame->mFrameData;
 					mFrame->mFrameData = data;
 					mFrame->mFrameDataSize = len;
 					mFrame->mFrameType = LINEARRLE16;
+					mFrame->mSpans = 0;
 					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 				}
 				else
@@ -615,12 +617,12 @@ public:
 		{
 			if (gSlowBlocks)
 			{
-				if (gUseLZ4 && (gAggressive || !mPrev)) // only LZ block that doesn't need previous frames
+				if (gUseLZ4 && (gAggressive || !mPrev)) // LZ block that doesn't need previous frames
 				{
 					data = new unsigned char[pixels * 2];
-					len = encodeLZ4Frame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+					int spans = 0;
+					len = encodeLZ4Frame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
 					if (gVerify) if (len > pixels) printf("overlong Lz4 %d +%d\n", len, len - pixels);
-					mFrame->mFrameSize[LZ4] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -628,6 +630,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = LZ4;
+						mFrame->mSpans = spans;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -636,12 +639,11 @@ public:
 					}
 				}
 
-				if (gUseLZ3E) // only LZ block that doesn't need previous frames
+				if (gUseLZ3E) // LZ block that doesn't need previous frames
 				{
 					data = new unsigned char[pixels * 2];
 					len = encodeLZ3EFrame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Lz3e %d +%d\n", len, len - pixels);
-					mFrame->mFrameSize[LZ3E] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -649,6 +651,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = LZ3E;
+						mFrame->mSpans = 0;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -668,7 +671,6 @@ public:
 					data = new unsigned char[pixels * 2];
 					len = encodeLinearDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Ldelta8 %d +%d\n", len, len - pixels);
-					mFrame->mFrameSize[LINEARDELTA8] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -676,6 +678,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = LINEARDELTA8;
+						mFrame->mSpans = 0;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -689,7 +692,6 @@ public:
 					data = new unsigned char[pixels * 2];
 					len = encodeLinearDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Ldelta16 %d +%d\n", len, len - pixels);
-					mFrame->mFrameSize[LINEARDELTA16] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -697,6 +699,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = LINEARDELTA16;
+						mFrame->mSpans = 0;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -712,7 +715,6 @@ public:
 						data = new unsigned char[pixels * 2];
 						len = encodeLZ1Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz1 %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ1] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -720,6 +722,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ1;
+							mFrame->mSpans = 0;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -731,9 +734,9 @@ public:
 					if (gUseLZ1b && gAggressive)
 					{
 						data = new unsigned char[pixels * 2];
-						len = encodeLZ1bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						int spans = 0;
+						len = encodeLZ1bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
 						if (gVerify) if (len > pixels) printf("overlong Lz1b %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ1B] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -741,6 +744,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ1B;
+							mFrame->mSpans = spans;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -754,7 +758,6 @@ public:
 						data = new unsigned char[pixels * 2];
 						len = encodeLZ2Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ2] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -762,6 +765,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ2;
+							mFrame->mSpans = 0;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -775,7 +779,6 @@ public:
 						data = new unsigned char[pixels * 2];
 						len = encodeLZ2bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz2b %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ2B] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -783,6 +786,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ2B;
+							mFrame->mSpans = 0;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -794,9 +798,9 @@ public:
 					if (gUseLZ5)
 					{
 						data = new unsigned char[pixels * 2];
-						len = encodeLZ5Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						int spans = 0;
+						len = encodeLZ5Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
 						if (gVerify) if (len > pixels) printf("overlong Lz5 %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ5] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -804,6 +808,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ5;
+							mFrame->mSpans = spans;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -815,9 +820,9 @@ public:
 					if (gUseLZ6 && gAggressive)
 					{
 						data = new unsigned char[pixels * 2];
-						len = encodeLZ6Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						int spans = 0;
+						len = encodeLZ6Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
 						if (gVerify) if (len > pixels) printf("overlong Lz6 %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ6] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -825,6 +830,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ6;
+							mFrame->mSpans = spans;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -838,7 +844,6 @@ public:
 						data = new unsigned char[pixels * 4];
 						len = encodeLZ3BFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz3b %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ3B] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -846,6 +851,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ3B;
+							mFrame->mSpans = 0;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -857,9 +863,9 @@ public:
 					if (gUseLZ3C && gAggressive)
 					{
 						data = new unsigned char[pixels * 4];
-						len = encodeLZ3CFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
+						int spans = 0;
+						len = encodeLZ3CFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, spans);
 						if (gVerify) if (len > pixels) printf("overlong Lz3c %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ3C] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -867,6 +873,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ3C;
+							mFrame->mSpans = spans;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -880,7 +887,6 @@ public:
 						data = new unsigned char[pixels * 4];
 						len = encodeLZ3DFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 						if (gVerify) if (len > pixels) printf("overlong Lz3d %d +%d\n", len, len - pixels);
-						mFrame->mFrameSize[LZ3D] = len;
 
 						if (len < mFrame->mFrameDataSize)
 						{
@@ -888,6 +894,7 @@ public:
 							mFrame->mFrameData = data;
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ3D;
+							mFrame->mSpans = 0;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -903,7 +910,6 @@ public:
 					data = new unsigned char[pixels * 4];
 					len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
-					mFrame->mFrameSize[LZ3] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -911,6 +917,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = LZ3;
+						mFrame->mSpans = 0;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -927,7 +934,6 @@ public:
 					data = new unsigned char[pixels * 2];
 					len = encodeDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong delta8 %d +%d\n", len, len - pixels);
-					mFrame->mFrameSize[DELTA8FRAME] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -935,6 +941,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = DELTA8FRAME;
+						mFrame->mSpans = 0;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -948,7 +955,6 @@ public:
 					data = new unsigned char[pixels * 2];
 					len = encodeDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth, mHeader.mHeight);
 					if (gVerify) if (len > pixels) printf("overlong delta16 %d +%d\n", len, len - pixels);
-					mFrame->mFrameSize[DELTA16FRAME] = len;
 
 					if (len < mFrame->mFrameDataSize)
 					{
@@ -956,6 +962,7 @@ public:
 						mFrame->mFrameData = data;
 						mFrame->mFrameDataSize = len;
 						mFrame->mFrameType = DELTA16FRAME;
+						mFrame->mSpans = 0;
 						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 					}
 					else
@@ -1172,6 +1179,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 		0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff,0xffffff };
 	int total = 0;
 	int frames = 0;
+	int totalspans = 0;
 
 	while (walker)
 	{
@@ -1205,13 +1213,14 @@ void output_flx(FliHeader& header, FILE* outfile)
 
 		framecounts[walker->mFrameType]++;
 		total += walker->mFrameDataSize;
+		totalspans += walker->mSpans;
 		walker = walker->mNext;
 		frames++;
 
 		fputc(FLX_NEXT, outfile);
 	}
 	printf("\nTotal %d bytes of payload (%d kB, %d MB), %d bytes overhead\n", total, total / 1024, total / (1024 * 1024), ftell(outfile) - total);
-	printf("Compression ratio %3.3f%%, %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), total / frames);
+	printf("Compression ratio %3.3f%%, %d spans and %d bytes per frame on average\n", 100.0 * total / (double)(frames * header.mWidth * header.mHeight), totalspans / frames, total / frames);
 	printf("\nBlock types:\n");
 	if (framecounts[1]) printf("h sameframe     %5d (%5d -%5d bytes)\n", framecounts[1], frameminsize[1], framemaxsize[1]);
 	if (framecounts[2]) printf("s blackframe    %5d (%5d -%5d bytes)\n", framecounts[2], frameminsize[2], framemaxsize[2]);

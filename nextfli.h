@@ -137,15 +137,12 @@ struct Frame
 	Frame* mNext;
 
 	unsigned char mChecksum1, mChecksum2;
+	unsigned int mSpans;
 
-	int mFrameSize[FRAMETYPE_MAX];
-
-	Frame() : mFrameType(0), mFrameData(0), mFrameDataSize(0), mPaletteChanged(0), mRgbPixels(0), mIndexPixels(0), mNext(0), mChecksum1(0), mChecksum2(0)
+	Frame() : mFrameType(0), mFrameData(0), mFrameDataSize(0), mPaletteChanged(0), mRgbPixels(0), mIndexPixels(0), mNext(0), mChecksum1(0), mChecksum2(0), mSpans(0)
 	{
 		for (int i = 0; i < 256; i++)
 			mPalette[i] = 0;
-		for (int i = 0; i < FRAMETYPE_MAX; i++)
-			mFrameSize[i] = 0;
 	}
 };
 
@@ -159,17 +156,17 @@ int encodeLZ3Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 int encodeLZ2Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ1Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ2bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int& spans);
 int encodeLinearDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLinearDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLinearRLE16Frame(unsigned char* data, unsigned char* src, int pixels);
 int encodeLinearRLE8Frame(unsigned char* data, unsigned char* src, int pixels);
-int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, int pixels);
-int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, int pixels, int& spans);
+int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int& spans);
+int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int& spans);
 
 int encodeLZ3BFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
-int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
+int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int &spans);
 int encodeLZ3DFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels);
 int encodeLZ3EFrame(unsigned char* data, unsigned char* aFrame, int pixels);
 
