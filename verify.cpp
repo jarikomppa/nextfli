@@ -1074,7 +1074,8 @@ int readword(unsigned char* &f)
 void verifyfile(const char* fn, const char* logfilename)
 {
 	FILE* f = fopen(fn, "rb");
-	FILE* lf = fopen(logfilename, "w");
+	FILE* lf = 0;
+	if (logfilename) lf = fopen(logfilename, "w");
 	if (!f)
 	{
 		printf("Can't verify \"%s\" - file not found\n", fn);
