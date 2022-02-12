@@ -1232,7 +1232,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY, ANALYZE };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				 "USAGE: nextfli outputfilename inputfilemask [options]\n\nOptions:"},
@@ -1254,13 +1254,15 @@ const option::Descriptor usage[] =
 	{ PALWIDTH,     0, "c", "colors", option::Arg::Optional,     " -c --colors\t Number of colors in palette. (default: 256)"},
 	{ CHUNKYX,      0, "X", "chunkyx", option::Arg::Optional,    " -X --chunkyx\t Pixels per pixel horizontally (default: 1)"},
 	{ CHUNKYY,      0, "Y", "chunkyy", option::Arg::Optional,    " -Y --chunkyy\t Pixels per pixel vertically (default: 1)"},
-	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flc frames*.png -f3 -d -iframelog.txt"},
+	{ ANALYZE,      0, "a", "analyze", option::Arg::None,        " -a --analyze\t Analyze existing file."},
+	{ UNKNOWN,      0, "", "", option::Arg::None,				 "Example:\n  nextfli test.flx \"frames*.png\" -r3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
 };
 
 
 int main(int parc, char* pars[])
 {
+	auto start = std::chrono::steady_clock::now();
 	option::Stats stats(usage, parc - 1, pars + 1);
 	assert(stats.buffer_max < 32 && stats.options_max < 32);
 	option::Option options[32], buffer[32];
@@ -1274,177 +1276,179 @@ int main(int parc, char* pars[])
 		return 0;
 	}
 
-	if (parse.error() || parc < 3 || options[HELP] || parse.nonOptionsCount() != 2)
+	if (parse.error() || !options[ANALYZE])
 	{
-		option::printUsage(std::cout, usage);
-		return 0;
-	}
-	if (options[GIF])
-	{
-		gClassicBlocks = 0;
-		gExtendedBlocks = 0;
-	}
-	else
-		if (options[FLC])
+
+		if (parse.error() || parc < 3 || options[HELP] || parse.nonOptionsCount() != 2)
 		{
-			gClassicBlocks = 1;
+			option::printUsage(std::cout, usage);
+			return 0;
+		}
+		if (options[GIF])
+		{
+			gClassicBlocks = 0;
 			gExtendedBlocks = 0;
 		}
 		else
+			if (options[FLC])
+			{
+				gClassicBlocks = 1;
+				gExtendedBlocks = 0;
+			}
+			else
+			{
+				gClassicBlocks = 0;
+				gExtendedBlocks = 1;
+				gSlowBlocks = 1;
+			}
+
+		gThreads = std::thread::hardware_concurrency();
+
+		if (options[QUICK]) gAggressive = 0;
+		if (options[HALFRES]) gHalfRes = 1;
+		if (options[DITHER]) gDither = 1;
+		if (options[FASTSCALE]) gPointSample = 1;
+		if (options[VERIFY]) gVerify = 1;
+		if (options[THREADS])
 		{
-			gClassicBlocks = 0;
-			gExtendedBlocks = 1;
-			gSlowBlocks = 1;
+			if (options[THREADS].arg != 0 && options[THREADS].arg[0])
+				gThreads = atoi(options[THREADS].arg);
+			else
+			{
+				printf("Invalid threads. Example: -t7\n");
+				return 0;
+			}
+		}
+		if (options[MINSPAN])
+		{
+			if (options[MINSPAN].arg != 0 && options[MINSPAN].arg[0])
+				gMinSpan = atoi(options[MINSPAN].arg);
+			else
+			{
+				printf("Invalid min span. Example: -m20\n");
+				return 0;
+			}
+		}
+		if (options[FRAMEDELAY])
+		{
+			if (options[FRAMEDELAY].arg != 0 && options[FRAMEDELAY].arg[0])
+				gFramedelay = atoi(options[FRAMEDELAY].arg);
+			else
+			{
+				printf("Invalid framedelay. Example: -r3\n");
+				return 0;
+			}
+		}
+		if (options[LOSSY])
+		{
+			if (options[LOSSY].arg != 0 && options[LOSSY].arg[0])
+				gLossy = atoi(options[LOSSY].arg);
+			else
+			{
+				printf("Invalid lossy. Example: -L3\n");
+				return 0;
+			}
+		}
+		if (options[KEYFRAMES])
+		{
+			if (options[KEYFRAMES].arg != 0 && options[KEYFRAMES].arg[0])
+				gLossyKeyframes = atoi(options[KEYFRAMES].arg);
+			else
+			{
+				printf("Invalid keyframes. Example: -K25\n");
+				return 0;
+			}
+		}
+		if (options[INFO])
+		{
+			if (options[INFO].arg == 0 || !options[INFO].arg[0])
+			{
+				printf("Invalid infolog. Example: -iinfolog.txt\n");
+				return 0;
+			}
+		}
+		if (options[PALWIDTH])
+		{
+			if (options[PALWIDTH].arg != 0 && options[PALWIDTH].arg[0])
+				gPaletteWidth = atoi(options[PALWIDTH].arg);
+			else
+			{
+				printf("Invalid number of colors. Example: -c16\n");
+				return 0;
+			}
+		}
+		if (options[CHUNKYX])
+		{
+			if (options[CHUNKYX].arg != 0 && options[CHUNKYX].arg[0])
+				gChunkyX = atoi(options[CHUNKYX].arg);
+			else
+			{
+				printf("Invalid chunky x. Example: -X3\n");
+				return 0;
+			}
+		}
+		if (options[CHUNKYY])
+		{
+			if (options[CHUNKYY].arg != 0 && options[CHUNKYY].arg[0])
+				gChunkyX = atoi(options[CHUNKYY].arg);
+			else
+			{
+				printf("Invalid chunky y. Example: -Y3\n");
+				return 0;
+			}
 		}
 
-	gThreads = std::thread::hardware_concurrency();
 
-	if (options[QUICK]) gAggressive = 0;
-	if (options[HALFRES]) gHalfRes = 1;
-	if (options[DITHER]) gDither = 1;
-	if (options[FASTSCALE]) gPointSample = 1;
-	if (options[VERIFY]) gVerify = 1;
-	if (options[THREADS])
-	{
-		if (options[THREADS].arg != 0 && options[THREADS].arg[0])
-			gThreads = atoi(options[THREADS].arg);
-		else
+		if (gFramedelay <= 0)
+			gFramedelay = 1;
+
+		if (gThreads < 0)
+			gThreads = 0;
+
+		FILE* outfile;
+		FliHeader header;
+
+		header.mWidth = 256;
+		header.mHeight = 192;
+		header.mFrames = 0;
+
+		printf("Running with %d threads\n", gThreads);
+		printf("Encoding with %d frame delay (%3.3fhz)\n", gFramedelay, 50.0f / gFramedelay);
+		header.mSpeed = (1000 / 50) * gFramedelay;
+
+		loadframes(header, parse.nonOption(1));
+		if (header.mFrames == 0)
 		{
-			printf("Invalid threads. Example: -t7\n");
+			printf("No frames loaded.\n");
 			return 0;
 		}
-	}
-	if (options[MINSPAN])
-	{
-		if (options[MINSPAN].arg != 0 && options[MINSPAN].arg[0])
-			gMinSpan = atoi(options[MINSPAN].arg);
-		else
+
+		quantize(header);
+		encode(header);
+		printf("Opening %s for writing..\n", parse.nonOption(0));
+		outfile = fopen(parse.nonOption(0), "wb");
+		if (!outfile)
 		{
-			printf("Invalid min span. Example: -m20\n");
+			printf("file open failed\n");
 			return 0;
 		}
-	}
-	if (options[FRAMEDELAY])
-	{
-		if (options[FRAMEDELAY].arg != 0 && options[FRAMEDELAY].arg[0])
-			gFramedelay = atoi(options[FRAMEDELAY].arg);
-		else
+		if (options[GIF])
 		{
-			printf("Invalid framedelay. Example: -r3\n");
-			return 0;
-		}
-	}
-	if (options[LOSSY])
-	{
-		if (options[LOSSY].arg != 0 && options[LOSSY].arg[0])
-			gLossy = atoi(options[LOSSY].arg);
-		else
-		{
-			printf("Invalid lossy. Example: -L3\n");
-			return 0;
-		}
-	}
-	if (options[KEYFRAMES])
-	{
-		if (options[KEYFRAMES].arg != 0 && options[KEYFRAMES].arg[0])
-			gLossyKeyframes = atoi(options[KEYFRAMES].arg);
-		else
-		{
-			printf("Invalid keyframes. Example: -K25\n");
-			return 0;
-		}
-	}
-	if (options[INFO])
-	{
-		if (options[INFO].arg == 0 || !options[INFO].arg[0])
-		{
-			printf("Invalid infolog. Example: -iinfolog.txt\n");
-			return 0;
-		}
-	}
-	if (options[PALWIDTH])
-	{
-		if (options[PALWIDTH].arg != 0 && options[PALWIDTH].arg[0])
-			gPaletteWidth = atoi(options[PALWIDTH].arg);
-		else
-		{
-			printf("Invalid number of colors. Example: -c16\n");
-			return 0;
-		}
-	}
-	if (options[CHUNKYX])
-	{
-		if (options[CHUNKYX].arg != 0 && options[CHUNKYX].arg[0])
-			gChunkyX = atoi(options[CHUNKYX].arg);
-		else
-		{
-			printf("Invalid chunky x. Example: -X3\n");
-			return 0;
-		}
-	}
-	if (options[CHUNKYY])
-	{
-		if (options[CHUNKYY].arg != 0 && options[CHUNKYY].arg[0])
-			gChunkyX = atoi(options[CHUNKYY].arg);
-		else
-		{
-			printf("Invalid chunky y. Example: -Y3\n");
-			return 0;
-		}
-	}
-
-
-	if (gFramedelay <= 0)
-		gFramedelay = 1;
-
-	if (gThreads < 0)
-		gThreads = 0;
-
-	FILE* outfile;
-	FliHeader header;
-	auto start = std::chrono::steady_clock::now();
-
-	header.mWidth = 256;
-	header.mHeight = 192;
-	header.mFrames = 0;
-
-	printf("Running with %d threads\n", gThreads);
-	printf("Encoding with %d frame delay (%3.3fhz)\n", gFramedelay, 50.0f / gFramedelay);
-	header.mSpeed = (1000 / 50) * gFramedelay;
-
-	loadframes(header, parse.nonOption(1));
-	if (header.mFrames == 0)
-	{
-		printf("No frames loaded.\n");
-		return 0;
-	}
-
-	quantize(header);
-	encode(header);
-	printf("Opening %s for writing..\n", parse.nonOption(0));
-	outfile = fopen(parse.nonOption(0), "wb");
-	if (!outfile)
-	{
-		printf("file open failed\n");
-		return 0;
-	}
-	if (options[GIF])
-	{
-		fclose(outfile);
-		outfile = 0;
-		output_gif(header, parse.nonOption(0));
-	}
-	else
-		if (options[FLC])
-		{
-			output_flc(header, outfile);
+			fclose(outfile);
+			outfile = 0;
+			output_gif(header, parse.nonOption(0));
 		}
 		else
-		{
-			output_flx(header, outfile);
-		}
-	if (outfile) fclose(outfile);
-
+			if (options[FLC])
+			{
+				output_flc(header, outfile);
+			}
+			else
+			{
+				output_flx(header, outfile);
+			}
+		if (outfile) fclose(outfile);
+	}
 
 	if (options[VERIFY] || options[INFO])
 	{

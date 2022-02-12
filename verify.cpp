@@ -4,6 +4,9 @@
 #include <assert.h>
 #include "nextfli.h"
 
+static int rlelen[8192] = {};
+static int lzlen[8192] = {};
+static int litlen[8192] = {};
 
 int decode_rleframe(unsigned char *buf, unsigned char *data, int datalen, int aWidth, int aHeight)
 {
@@ -480,6 +483,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			memcpy(buf + ofs, prev + runofs, runlen);
 			ofs += runlen;
 			spans++; lz1++;
+			lzlen[runlen < 8192 ? runlen : 8191]++;
 		}
 		else
 		{
@@ -488,6 +492,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
 			spans++; rle++;
+			rlelen[runlen < 8192 ? runlen : 8191]++;
 		}
 
 		if (ofs < pixels)
@@ -499,6 +504,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 				ofs += copylen;
 				idx += copylen;
 				spans++; lit++;
+				litlen[copylen < 8192 ? copylen : 8191]++;
 			}
 			else
 			{
@@ -508,6 +514,7 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 				memcpy(buf + ofs, prev + runofs, runlen);
 				ofs += runlen;
 				spans++; lz2++;
+				lzlen[runlen < 8192 ? runlen : 8191]++;
 			}
 		}
 	}
@@ -635,6 +642,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 			ofs += runlen;
 
 			spans++; lz1++;
+			lzlen[runlen < 8192 ? runlen : 8191]++;
 		}
 		else
 		{
@@ -651,6 +659,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
 			spans++; rle++;
+			rlelen[runlen < 8192 ? runlen : 8191]++;
 		}
 
 		if (ofs < pixels)
@@ -662,6 +671,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 				ofs += copylen;
 				idx += copylen;
 				spans++; lit++;
+				litlen[copylen < 8192 ? copylen : 8191]++;
 			}
 			else
 			{
@@ -679,6 +689,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 				mymemcpy(buf + ofs, buf + copyofs, copylen);
 				ofs += copylen;
 				spans++; lz2++;
+				lzlen[copylen < 8192 ? copylen : 8191]++;
 			}
 		}
 	}
@@ -715,6 +726,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			ofs += runlen;
 
 			spans++; lz1++;
+			lzlen[runlen < 8192 ? runlen : 8191]++;
 		}
 		else
 		{
@@ -731,6 +743,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
 			spans++; rle++;
+			rlelen[runlen < 8192 ? runlen : 8191]++;
 		}
 
 		if (ofs < pixels)
@@ -747,6 +760,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				ofs += copylen;
 				idx += copylen;
 				spans++; lit++;
+				litlen[copylen < 8192 ? copylen : 8191]++;
 			}
 			else
 			{
@@ -764,6 +778,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				mymemcpy(buf + ofs, prev + copyofs, copylen);
 				ofs += copylen;
 				spans++; lz2++;
+				lzlen[copylen < 8192 ? copylen : 8191]++;
 			}
 		}
 	}
@@ -800,6 +815,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			ofs += runlen;
 
 			spans++; lz1++;
+			lzlen[runlen < 8192 ? runlen : 8191]++;
 		}
 		else
 		{
@@ -816,6 +832,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
 			spans++; rle++;
+			rlelen[runlen < 8192 ? runlen : 8191]++;
 		}
 
 		if (ofs < pixels)
@@ -832,6 +849,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				ofs += copylen;
 				idx += copylen;
 				spans++; lit++;
+				litlen[copylen < 8192 ? copylen : 8191]++;
 			}
 			else
 			{
@@ -849,6 +867,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				mymemcpy(buf + ofs, buf + copyofs, copylen);
 				ofs += copylen;
 				spans++; lz2++;
+				lzlen[copylen < 8192 ? copylen : 8191]++;
 			}
 		}
 	}
@@ -883,6 +902,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 
 			ofs += runlen;
 			spans++; lz1++;
+			lzlen[runlen < 8192 ? runlen : 8191]++;
 		}
 		else
 		{
@@ -899,6 +919,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			memset(buf + ofs, c, runlen);
 			ofs += runlen;
 			spans++; rle++;
+			rlelen[runlen < 8192 ? runlen : 8191]++;
 		}
 
 		if (ofs < pixels)
@@ -916,6 +937,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 
 				ofs += runlen;
 				spans++; lz2++;
+				lzlen[runlen < 8192 ? runlen : 8191]++;
 			}
 			else
 			{
@@ -932,6 +954,7 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 				ofs += runlen;
 				idx += runlen;
 				spans++; lit++;
+				litlen[runlen < 8192 ? runlen : 8191]++;
 			}
 		}
 	}
@@ -1199,5 +1222,14 @@ void verifyfile(const char* fn, const char* logfilename)
 	}
 	delete[] data;
 	printf("Verify done.\n");
+	
+	if (lf)
+	{
+		fprintf(lf, "\nLen, Spanlen, RLElen, LZlen, Litlen\n");
+		for (int i = 0; i < 8192; i++)
+			fprintf(lf, "%d, %d, %d, %d, %d\n", i, lzlen[i] + rlelen[i] + litlen[i], rlelen[i],lzlen[i],litlen[i]);
+		fprintf(lf, "\n\n");
+	}
+	
 	if (lf) fclose(lf);
 }
