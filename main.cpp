@@ -44,7 +44,7 @@ int gVerify = 0;
 int gFramedelay = 4;
 int gThreads = 0;
 int gGlobalMinSpan = 0;
-int gSpanGoal = 0;
+int gSpanGoal = 100000;
 int gMaxFrameSize = 8192;
 int gLossy = 0;
 int gLossyKeyframes = 0;
@@ -1042,7 +1042,7 @@ const option::Descriptor usage[] =
 	{ CHUNKYX,      0, "X", "chunkyx", option::Arg::Optional,     " -X --chunkyx\t Pixels per pixel horizontally (default: 1)"},
 	{ CHUNKYY,      0, "Y", "chunkyy", option::Arg::Optional,     " -Y --chunkyy\t Pixels per pixel vertically (default: 1)"},
 	{ ANALYZE,      0, "a", "analyze", option::Arg::None,         " -a --analyze\t Analyze existing file. Does not generate animation."},
-	{ SPANGOAL,     0, "G", "spangoal", option::Arg::Optional,    " -G --spangoal\t Set span goal. Grows file size. Heavy. (default: 0)"},
+	{ SPANGOAL,     0, "G", "spangoal", option::Arg::Optional,    " -G --spangoal\t Set span goal. Grows file size. Heavy. (default: 100000)"},
 	{ MAXFRAMESIZE, 0, "S", "maxframesize", option::Arg::Optional," -S --maxframesize\t Maximum frame size. Use with -G. (default:8192)"},
 	{ UNKNOWN,      0, "", "", option::Arg::None,				  "Example:\n  nextfli test.flx \"frames*.png\" -r3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
