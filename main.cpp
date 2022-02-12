@@ -490,6 +490,7 @@ public:
 		int allzero = 1;
 		for (int i = 0; allzero && i < pixels; i++)
 			allzero = (mFrame->mIndexPixels[i] == 0);
+
 		if (allzero && gUseBlack)
 		{
 			mFrame->mFrameType = BLACKFRAME;
@@ -570,51 +571,6 @@ public:
 
 		if (gExtendedBlocks)
 		{
-			if (gUseLRLE8 && gAggressive)
-			{
-				data = new unsigned char[pixels * 2];
-				len = encodeLinearRLE8Frame(data, mFrame->mIndexPixels, pixels);
-				if (gVerify) if (len > pixels) printf("overlong Lrle8 %d +%d\n", len, len - pixels);
-
-				if (len < mFrame->mFrameDataSize)
-				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = LINEARRLE8;
-					mFrame->mSpans = 0;
-					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				}
-				else
-				{
-					delete[] data;
-				}
-			}
-
-			if (gUseLRLE16 && gAggressive)
-			{
-				data = new unsigned char[pixels * 2];
-				len = encodeLinearRLE16Frame(data, (mFrame->mIndexPixels), pixels);
-				if (gVerify) if (len > pixels) printf("overlong Lrle16 %d +%d\n", len, len - pixels);
-
-				if (len < mFrame->mFrameDataSize)
-				{
-					delete[] mFrame->mFrameData;
-					mFrame->mFrameData = data;
-					mFrame->mFrameDataSize = len;
-					mFrame->mFrameType = LINEARRLE16;
-					mFrame->mSpans = 0;
-					if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-				}
-				else
-				{
-					delete[] data;
-				}
-			}
-		}
-
-		if (gExtendedBlocks)
-		{
 			if (gSlowBlocks)
 			{
 				if (gUseLZ4 && (gAggressive || !mPrev)) // LZ block that doesn't need previous frames
@@ -638,27 +594,6 @@ public:
 						delete[] data;
 					}
 				}
-
-				if (gUseLZ3E) // LZ block that doesn't need previous frames
-				{
-					data = new unsigned char[pixels * 2];
-					len = encodeLZ3EFrame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong Lz3e %d +%d\n", len, len - pixels);
-
-					if (len < mFrame->mFrameDataSize)
-					{
-						delete[] mFrame->mFrameData;
-						mFrame->mFrameData = data;
-						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = LZ3E;
-						mFrame->mSpans = 0;
-						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-					}
-					else
-					{
-						delete[] data;
-					}
-				}
 			}
 		}
 
@@ -666,71 +601,8 @@ public:
 		{
 			if (gExtendedBlocks)
 			{
-				if (gUseLDelta8 && gAggressive)
-				{
-					data = new unsigned char[pixels * 2];
-					len = encodeLinearDelta8Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong Ldelta8 %d +%d\n", len, len - pixels);
-
-					if (len < mFrame->mFrameDataSize)
-					{
-						delete[] mFrame->mFrameData;
-						mFrame->mFrameData = data;
-						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = LINEARDELTA8;
-						mFrame->mSpans = 0;
-						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-					}
-					else
-					{
-						delete[] data;
-					}
-				}
-
-				if (gUseLDelta16 && gAggressive)
-				{
-					data = new unsigned char[pixels * 2];
-					len = encodeLinearDelta16Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong Ldelta16 %d +%d\n", len, len - pixels);
-
-					if (len < mFrame->mFrameDataSize)
-					{
-						delete[] mFrame->mFrameData;
-						mFrame->mFrameData = data;
-						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = LINEARDELTA16;
-						mFrame->mSpans = 0;
-						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-					}
-					else
-					{
-						delete[] data;
-					}
-				}
-
 				if (gSlowBlocks)
 				{
-					if (gUseLZ1 && gAggressive)
-					{
-						data = new unsigned char[pixels * 2];
-						len = encodeLZ1Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-						if (gVerify) if (len > pixels) printf("overlong Lz1 %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ1;
-							mFrame->mSpans = 0;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
 					if (gUseLZ1b && gAggressive)
 					{
 						data = new unsigned char[pixels * 2];
@@ -745,48 +617,6 @@ public:
 							mFrame->mFrameDataSize = len;
 							mFrame->mFrameType = LZ1B;
 							mFrame->mSpans = spans;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
-					if (gUseLZ2 && gAggressive)
-					{
-						data = new unsigned char[pixels * 2];
-						len = encodeLZ2Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-						if (gVerify) if (len > pixels) printf("overlong Lz2 %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ2;
-							mFrame->mSpans = 0;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
-					if (gUseLZ2b && gAggressive)
-					{
-						data = new unsigned char[pixels * 2];
-						len = encodeLZ2bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-						if (gVerify) if (len > pixels) printf("overlong Lz2b %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ2B;
-							mFrame->mSpans = 0;
 							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
 						}
 						else
@@ -839,27 +669,6 @@ public:
 						}
 					}
 
-					if (gUseLZ3B && gAggressive)
-					{
-						data = new unsigned char[pixels * 4];
-						len = encodeLZ3BFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-						if (gVerify) if (len > pixels) printf("overlong Lz3b %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ3B;
-							mFrame->mSpans = 0;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
 					if (gUseLZ3C && gAggressive)
 					{
 						data = new unsigned char[pixels * 4];
@@ -881,50 +690,8 @@ public:
 							delete[] data;
 						}
 					}
-
-					if (gUseLZ3D && gAggressive)
-					{
-						data = new unsigned char[pixels * 4];
-						len = encodeLZ3DFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-						if (gVerify) if (len > pixels) printf("overlong Lz3d %d +%d\n", len, len - pixels);
-
-						if (len < mFrame->mFrameDataSize)
-						{
-							delete[] mFrame->mFrameData;
-							mFrame->mFrameData = data;
-							mFrame->mFrameDataSize = len;
-							mFrame->mFrameType = LZ3D;
-							mFrame->mSpans = 0;
-							if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-						}
-						else
-						{
-							delete[] data;
-						}
-					}
-
 				}
 
-				if (gUseLZ3)
-				{
-					data = new unsigned char[pixels * 4];
-					len = encodeLZ3Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight);
-					if (gVerify) if (len > pixels) printf("overlong Lz3 %d +%d\n", len, len - pixels);
-
-					if (len < mFrame->mFrameDataSize)
-					{
-						delete[] mFrame->mFrameData;
-						mFrame->mFrameData = data;
-						mFrame->mFrameDataSize = len;
-						mFrame->mFrameType = LZ3;
-						mFrame->mSpans = 0;
-						if (gVerify) verify_frame(mFrame, mPrev, mHeader.mWidth, mHeader.mHeight);
-					}
-					else
-					{
-						delete[] data;
-					}
-				}
 			}
 
 			if (gClassicBlocks)
