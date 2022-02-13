@@ -51,6 +51,7 @@ int gLossyKeyframes = 0;
 int gPaletteWidth = 256;
 int gChunkyX = 1;
 int gChunkyY = 1;
+int gCreateLoopFrame = 0;
 
 // trivial blocks
 int gUseBlack = 1;
@@ -152,6 +153,19 @@ public:
 		stbi_image_free((void*)data);
 	}
 };
+
+void addLoopFrame(FliHeader &header)
+{
+	printf("Adding loop frame..\n");
+	Frame* fr = new Frame;
+	fr->mIndexPixels = new unsigned char[header.mHeight * header.mWidth];
+	memcpy(fr->mIndexPixels, gRoot->mIndexPixels, header.mHeight * header.mWidth);
+	fr->mPaletteChanged = gRoot->mPaletteChanged;
+	memcpy(fr->mPalette, gRoot->mPalette, sizeof(int) * 256);
+	gLast->mNext = fr;
+	gLast = fr;
+	header.mFrames++;	
+}
 
 void addFrame(char* fn, const FliHeader& header, Thread::Pool& threadpool)
 {
@@ -746,7 +760,7 @@ public:
 			minspan++;
 		}
 		while (mFrame->mSpans > gSpanGoal && mFrame->mFrameDataSize < gMaxFrameSize);
-	} 
+	}
 };
 
 void encode(const FliHeader& header)
@@ -957,8 +971,8 @@ void output_flx(FliHeader& header, FILE* outfile)
 
 	while (walker)
 	{
-		if (frames == 1)
-			hdr.loopoffset = (unsigned short)ftell(outfile); // TODO: implement loop frame
+		if (frames == gCreateLoopFrame) // 0 or 1
+			hdr.loopoffset = (unsigned short)ftell(outfile);
 		int chunktype = 0;
 		switch (walker->mFrameType)
 		{
@@ -1019,7 +1033,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	printf("\nTime elapsed: %3.3fs\n\n", elapsed_seconds.count());
 }
 
-enum optionIndex { UNKNOWN, HELP, FLC, FLX, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY, ANALYZE, SPANGOAL, MAXFRAMESIZE };
+enum optionIndex { UNKNOWN, HELP, FLC, FLX, HALFRES, DITHER, FASTSCALE, VERIFY, THREADS, FRAMEDELAY, GIF, INFO, QUICK, MINSPAN, LOSSY, KEYFRAMES, PALWIDTH, CHUNKYX, CHUNKYY, ANALYZE, SPANGOAL, MAXFRAMESIZE, LOOPFRAME };
 const option::Descriptor usage[] =
 {
 	{ UNKNOWN,		0, "", "",	option::Arg::None,				  "USAGE: nextfli outputfilename inputfilemask [options]\n\nOptions:"},
@@ -1044,6 +1058,7 @@ const option::Descriptor usage[] =
 	{ ANALYZE,      0, "a", "analyze", option::Arg::None,         " -a --analyze\t Analyze existing file. Does not generate animation."},
 	{ SPANGOAL,     0, "G", "spangoal", option::Arg::Optional,    " -G --spangoal\t Set span goal. Grows file size. Heavy. (default: 100000)"},
 	{ MAXFRAMESIZE, 0, "S", "maxframesize", option::Arg::Optional," -S --maxframesize\t Maximum frame size. Use with -G. (default:8192)"},
+	{ LOOPFRAME,    0, "o", "genloopframe", option::Arg::None,    " -o --genloopframe\t Generate loop frame. (default: loop to 1st frame)"},
 	{ UNKNOWN,      0, "", "", option::Arg::None,				  "Example:\n  nextfli test.flx \"frames*.png\" -r3 -d -iframelog.txt"},
 	{ 0,0,0,0,0,0 }
 };
@@ -1098,6 +1113,7 @@ int main(int parc, char* pars[])
 		if (options[DITHER]) gDither = 1;
 		if (options[FASTSCALE]) gPointSample = 1;
 		if (options[VERIFY]) gVerify = 1;
+		if (options[LOOPFRAME]) gCreateLoopFrame = 1;
 		if (options[THREADS])
 		{
 			if (options[THREADS].arg != 0 && options[THREADS].arg[0])
@@ -1199,7 +1215,7 @@ int main(int parc, char* pars[])
 		if (options[MAXFRAMESIZE])
 		{
 			if (options[MAXFRAMESIZE].arg != 0 && options[MAXFRAMESIZE].arg[0])
-				gSpanGoal = atoi(options[MAXFRAMESIZE].arg);
+				gMaxFrameSize = atoi(options[MAXFRAMESIZE].arg);
 			else
 			{
 				printf("Invalid max frame size. Example: -S32768\n");
@@ -1233,6 +1249,10 @@ int main(int parc, char* pars[])
 		}
 
 		quantize(header);
+		if (gCreateLoopFrame)
+		{
+			addLoopFrame(header);
+		}
 		encode(header);
 		printf("Opening %s for writing..\n", parse.nonOption(0));
 		outfile = fopen(parse.nonOption(0), "wb");
