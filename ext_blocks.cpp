@@ -663,22 +663,25 @@ int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* a
 					bestLZRun3(aFrame, aPrev, ofs + lc, pixels, o, ms) < ms &&
 					runlength(aFrame + ofs + lc, ms) < ms)
 					lc++;
+
 				if (ofs + lc + ms > pixels)
 					lc = pixels - ofs;
 
 				if (lc > 127)
 				{
 					data[out++] = -128;
-					data[out++] = (lz >> 0) & 0xff;
-					data[out++] = (lz >> 8) & 0xff;
+					data[out++] = (lc >> 0) & 0xff;
+					data[out++] = (lc >> 8) & 0xff;
 				}
 				else
 				{
 					data[out++] = -lc;
 				}
+
 				for (int i = 0; i < lc; i++)
 				{
-					data[out++] = aFrame[ofs];
+					data[out] = aFrame[ofs];
+					out++;
 					ofs++;
 				}
 				spans++;

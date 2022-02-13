@@ -518,7 +518,10 @@ int decode_lz1b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz1b %d %d\n", ofs, pixels);
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer lz1b %d %d\n", ofs, pixels);
+	}
 	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
@@ -559,7 +562,10 @@ int decode_lz2b(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz2 %d %d\n", ofs, pixels);
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer lz2 %d %d\n", ofs, pixels);
+	}
 	return idx;
 }
 
@@ -610,7 +616,10 @@ int decode_lz3(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz3 %d %d\n", ofs, pixels);
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer lz3 %d %d\n", ofs, pixels);
+	}
 	return idx;
 }
 
@@ -693,7 +702,10 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz4 %d %d\n", ofs, pixels);
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer lz4 %d %d\n", ofs, pixels);
+	}
 	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
@@ -782,7 +794,10 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz5 %d %d\n", ofs, pixels);
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer lz5 %d %d\n", ofs, pixels);
+	}
 	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
@@ -871,7 +886,10 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz6 %d %d\n", ofs, pixels);
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer lz6 %d %d\n", ofs, pixels);
+	}
 	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
@@ -958,7 +976,10 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 			}
 		}
 	}
-	if (ofs > pixels) printf("wrote over buffer lz3c %d %d\n", ofs, pixels);
+	if (ofs > pixels)
+	{
+		printf("wrote over buffer lz3c %d %d\n", ofs, pixels);
+	}
 	if (lf) fprintf(lf, "spans:%5d lz1:%5d rle:%5d lit:%5d lz2:%5d", spans, lz1, rle, lit, lz2);
 	return idx;
 }
