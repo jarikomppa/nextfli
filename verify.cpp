@@ -984,88 +984,62 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 	return idx;
 }
 
-int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight)
+int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight, int aSubframe)
 {
+	int pixels = aWidth * aHeight;
 	unsigned char* buf = new unsigned char[aWidth * aHeight];
 	memset(buf, 0xcd, aWidth * aHeight);
 	int readbytes = 0;
-	switch (aFrame->mFrameType)
+	switch (aFrame->mFrameType[aSubframe])
 	{
 	case SAMEFRAME:
-		memcpy(buf, aFrame->mIndexPixels, aWidth * aHeight);
+		memcpy(buf, aFrame->mIndexPixels + pixels * aSubframe, pixels);
 		break;
 	case BLACKFRAME:
-		memset(buf, 0, aWidth * aHeight);
+		memset(buf, 0, pixels);
 		break;
 	case FLI_COPY:
-		memcpy(buf, aFrame->mIndexPixels, aWidth * aHeight);
-		readbytes = aWidth * aHeight;
+		memcpy(buf, aFrame->mIndexPixels + pixels * aSubframe, pixels);
+		readbytes = pixels;
 		break;
 	case ONECOLOR:
-		memset(buf, aFrame->mFrameData[0], aWidth * aHeight);
+		memset(buf, aFrame->mFrameData[aSubframe][0], pixels);
 		readbytes = 1;
 		break;
 	case RLEFRAME:
-		readbytes = decode_rleframe(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
+		readbytes = decode_rleframe(buf, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], aWidth, aHeight);
 		break;	
 	case DELTA8FRAME:
-		memcpy(buf, aPrev->mIndexPixels, aWidth * aHeight);
-		readbytes = decode_delta8frame(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
+		memcpy(buf, aPrev->mIndexPixels + aSubframe * pixels, pixels);
+		readbytes = decode_delta8frame(buf, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], aWidth, aHeight);
 		break;				
 	case DELTA16FRAME:
-		memcpy(buf, aPrev->mIndexPixels, aWidth * aHeight);
-		readbytes = decode_delta16frame(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth, aHeight);
+		memcpy(buf, aPrev->mIndexPixels + aSubframe * pixels, pixels);
+		readbytes = decode_delta16frame(buf, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], aWidth, aHeight);
 		break;		
-	case LINEARRLE8:
-		readbytes = decode_linearrle8(buf,  aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
-	case LINEARRLE16:
-		readbytes = decode_linearrle16(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
-	case LINEARDELTA8:
-		readbytes = decode_lineardelta8(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
-	case LINEARDELTA16:
-		readbytes = decode_lineardelta16(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
-	case LZ1:
-		readbytes = decode_lz1(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
-	case LZ2:
-		readbytes = decode_lz2(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
+
 	case LZ1B:
-		readbytes = decode_lz1b(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
-	case LZ2B:
-		readbytes = decode_lz2b(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
-		break;
-	case LZ3:
-		readbytes = decode_lz3(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		readbytes = decode_lz1b(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ4:
-		readbytes = decode_lz4(buf, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		readbytes = decode_lz4(buf, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ5:
-		readbytes = decode_lz5(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		readbytes = decode_lz5(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ6:
-		readbytes = decode_lz6(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		readbytes = decode_lz6(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ3C:
-		readbytes = decode_lz3c(buf, aPrev->mIndexPixels, aFrame->mFrameData, aFrame->mFrameDataSize, aWidth * aHeight);
+		readbytes = decode_lz3c(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
-	case LZ3B:
-	case LZ3D:
-	case LZ3E:
-		assert(0); // verify not implemented
-		/* fallthrough */
 	default:
+		assert(0); // verify not implemented
 		delete[] buf;
 		return 0;
 	}
 
-	if (readbytes != aFrame->mFrameDataSize)
+	if (readbytes != aFrame->mFrameDataSize[aSubframe])
 	{
 		printf("Block length mismatch (%d)\n", __LINE__);
 	}
@@ -1139,7 +1113,14 @@ void verifyfile(const char* fn, const char* logfilename)
 		delete[] data;
 		return;	
 	}
-	int pixels = 192 * 256;
+	int pixels = 0;
+	switch (config & 3)
+	{
+	case 0: pixels = 192 * 256; break;
+	case 1: pixels = 320 * 256; break;
+	case 2: pixels = 320 * 256; break;
+	case 3: pixels = 96 * 128; break;
+	}
 	unsigned char* f1 = new unsigned char[pixels];
 	unsigned char* f2 = new unsigned char[pixels];
 	memset(f1, 0, pixels);

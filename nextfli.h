@@ -125,25 +125,20 @@ struct FliChunkHeader
 
 struct Frame
 {
-	int mFrameType;
-	unsigned int mPalette[256];
-	int mPaletteChanged;
-	unsigned char* mFrameData;
-	int mFrameDataSize;
+	int mSubframes = 1;
+	int mFrameType[2] = {};
+	unsigned int mPalette[256] = {};
+	int mPaletteChanged = 0;
+	unsigned char* mFrameData[2] = {};
+	int mFrameDataSize[2] = {};
 
-	unsigned int* mRgbPixels;
-	unsigned char* mIndexPixels;
+	unsigned int* mRgbPixels = 0;
+	unsigned char* mIndexPixels = 0;
 
-	Frame* mNext;
+	Frame* mNext = 0;
 
-	unsigned char mChecksum1, mChecksum2;
-	unsigned int mSpans;
-
-	Frame() : mFrameType(0), mFrameData(0), mFrameDataSize(0), mPaletteChanged(0), mRgbPixels(0), mIndexPixels(0), mNext(0), mChecksum1(0), mChecksum2(0), mSpans(0)
-	{
-		for (int i = 0; i < 256; i++)
-			mPalette[i] = 0;
-	}
+	unsigned char mChecksum1[2] = {}, mChecksum2[2] = {};
+	unsigned int mSpans[2] = {};
 };
 
 
@@ -157,7 +152,7 @@ int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aP
 int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int& spans);
 int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int &spans);
 
-int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight);
+int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight, int aSubframe);
 
 int runlength(unsigned char* data, int max);
 int runlength16(unsigned char* cdata, int max);
