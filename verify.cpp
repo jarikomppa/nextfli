@@ -1145,12 +1145,13 @@ void verifyfile(const char* fn, const char* logfilename)
 	memset(f1, 0, pixels);
 	memset(f2, 0, pixels);
 
-	printf("Verifying \"%s\", %d frames, %d speed, %d config, %d drawoffs, %d loopoffs\n", fn, frames, speed, config, drawoffset, loopoffset);
+	printf("Verifying \"%s\", %d frames, %d speed, %x config, %d drawoffs, %d loopoffs\n", fn, frames, speed, config, drawoffset, loopoffset);
 
 	int dstofs = 0, srcofs = 0;
 	int frame = 0;
 	while ((p-data) < len && frame < frames)
 	{
+//		printf("Frame %d ofs %d (loopofs %d)\n", frame, p - data, loopoffset);
 		int ftype = readbyte(p);
 		int flen = 0;
 		if (ftype != FLX_NEXT && ftype != FLX_SUBFRAME)

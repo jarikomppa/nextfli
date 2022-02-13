@@ -944,6 +944,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	hdr.frames = header.mFrames;
 	hdr.speed = gFramedelay;
 	hdr.config = 0; // graphics mode
+	hdr.config |= gCreateLoopFrame ? 0x8000 : 0;
 	hdr.drawoffset = 0; // offset to start drawing from
 	hdr.loopoffset = 0; // offset to 2nd frame (or 1st if there's no loop frame)
 	for (int i = 0; i < 256; i++)
