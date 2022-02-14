@@ -105,7 +105,7 @@ public:
 	{
 		int n, x, y;
 		unsigned int* data = (unsigned int*)stbi_load(fn, &x, &y, &n, 4);
-
+		int height = header.mHeight;
 		if (gGraphicsMode == 1 || gGraphicsMode == 2)
 		{
 			// 320x and 640x modes have x and y swapped
@@ -127,19 +127,24 @@ public:
 		int ht = 0;
 		int wd = 0;
 
-		if ((float)y / x <= (float)header.mHeight / header.mWidth)
+		if (gGraphicsMode == 2)
+			height /= 2;
+		if ((float)y / x <= (float)height / header.mWidth)
 		{
 			wd = header.mWidth;
 			ht = wd * y / x;
 		}
 		else
 		{
-			wd = header.mHeight * x / y;
+			wd = height * x / y;
 			ht = wd * y / x;
 		}
 
 		if (gGraphicsMode == 2)
+		{
 			ht *= 2; // 640x mode has weird aspect ratio
+			height *= 2;
+		}
 
 		if (gHalfRes)
 		{
@@ -148,10 +153,10 @@ public:
 		}
 
 		xofs = (header.mWidth - wd) / 2;
-		yofs = (header.mHeight - ht) / 2;
+		yofs = (height - ht) / 2;
 
 
-		memset(fr->mRgbPixels, 0, sizeof(unsigned int) * header.mHeight * header.mWidth);
+		memset(fr->mRgbPixels, 0, sizeof(unsigned int) * height * header.mWidth);
 
 		if (gPointSample)
 		{
@@ -182,6 +187,7 @@ void addLoopFrame(FliHeader &header)
 	memcpy(fr->mIndexPixels, gRoot->mIndexPixels, header.mHeight * header.mWidth);
 	fr->mPaletteChanged = gRoot->mPaletteChanged;
 	memcpy(fr->mPalette, gRoot->mPalette, sizeof(int) * 256);
+	fr->mSubframes = gRoot->mSubframes;
 	gLast->mNext = fr;
 	gLast = fr;
 	header.mFrames++;	
@@ -192,6 +198,8 @@ void addFrame(char* fn, const FliHeader& header, Thread::Pool& threadpool)
 	Frame* fr = new Frame;
 	fr->mRgbPixels = new unsigned int[header.mHeight * header.mWidth];
 	memset(fr->mRgbPixels, 0, sizeof(int) * header.mHeight * header.mWidth);
+	if (gGraphicsMode == 1 || gGraphicsMode == 2)
+		fr->mSubframes = 2;
 
 	if (gRoot == NULL)
 	{
@@ -543,13 +551,9 @@ public:
 
 	virtual void work()
 	{
-		int pixels = mHeader.mWidth * mHeader.mHeight;
+		int pixels = mHeader.mWidth * mHeader.mHeight / mFrame->mSubframes;
 
 		calcChecksums();
-
-		int allzero = 1;
-		for (int i = 0; allzero && i < pixels; i++)
-			allzero = (mFrame->mIndexPixels[i] == 0);
 
 		int minspan = gGlobalMinSpan;
 		int totalspans = 0;
@@ -563,6 +567,10 @@ public:
 				int len = 0;
 				mFrame->mFrameData[subframe] = 0;
 				mFrame->mFrameDataSize[subframe] = 0xffffff;
+
+				int allzero = 1;
+				for (int i = 0; allzero && i < pixels; i++)
+					allzero = (mFrame->mIndexPixels[i + subframe * pixels] == 0);
 
 				if (allzero && gUseBlack)
 				{
@@ -578,7 +586,7 @@ public:
 					// Check if previous frame is identical to current
 					int identical = 1;
 					for (int i = 0; identical && i < pixels; i++)
-						identical = (mFrame->mIndexPixels[i] == mPrev->mIndexPixels[i]);
+						identical = (mFrame->mIndexPixels[i + subframe * pixels] == mPrev->mIndexPixels[i + subframe * pixels]);
 					if (identical)
 					{
 						mFrame->mFrameType[subframe] = SAMEFRAME;
@@ -643,7 +651,7 @@ public:
 						{
 							data = new unsigned char[pixels * 2];
 							int spans = 0;
-							len = encodeLZ4Frame(data, mFrame->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+							len = encodeLZ4Frame(data, mFrame->mIndexPixels + subframe * pixels, mFrame->mIndexPixels + subframe * 16384, mFrame->mSubframes > 1 ? 65536 : pixels, pixels, minspan, spans);
 							if (gVerify) if (len > pixels) printf("overlong Lz4 %d +%d\n", len, len - pixels);
 
 							if (len < mFrame->mFrameDataSize[subframe])
@@ -673,7 +681,7 @@ public:
 							{
 								data = new unsigned char[pixels * 2];
 								int spans = 0;
-								len = encodeLZ1bFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+								len = encodeLZ1bFrame(data, mFrame->mIndexPixels + pixels * subframe, mPrev->mIndexPixels + 16384 * subframe, mFrame->mSubframes > 1 ? 65536 : pixels, pixels, minspan, spans);
 								if (gVerify) if (len > pixels) printf("overlong Lz1b %d +%d\n", len, len - pixels);
 
 								if (len < mFrame->mFrameDataSize[subframe])
@@ -695,7 +703,7 @@ public:
 							{
 								data = new unsigned char[pixels * 2];
 								int spans = 0;
-								len = encodeLZ5Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+								len = encodeLZ5Frame(data, mFrame->mIndexPixels + pixels * subframe, mPrev->mIndexPixels + 16384 * subframe, mFrame->mSubframes > 1 ? 65536 : pixels, pixels, minspan, spans);
 								if (gVerify) if (len > pixels) printf("overlong Lz5 %d +%d\n", len, len - pixels);
 
 								if (len < mFrame->mFrameDataSize[subframe])
@@ -717,7 +725,13 @@ public:
 							{
 								data = new unsigned char[pixels * 2];
 								int spans = 0;
-								len = encodeLZ6Frame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+								len = encodeLZ6Frame(
+									data, 
+									mFrame->mIndexPixels + pixels * subframe, 
+									mFrame->mIndexPixels + 16384 * subframe, 
+									mPrev->mIndexPixels + 16384 * subframe, 
+									mFrame->mSubframes > 1 ? 65536 : pixels, 
+									pixels, minspan, spans);
 								if (gVerify) if (len > pixels) printf("overlong Lz6 %d +%d\n", len, len - pixels);
 
 								if (len < mFrame->mFrameDataSize[subframe])
@@ -739,7 +753,7 @@ public:
 							{
 								data = new unsigned char[pixels * 4];
 								int spans = 0;
-								len = encodeLZ3CFrame(data, mFrame->mIndexPixels, mPrev->mIndexPixels, mHeader.mWidth * mHeader.mHeight, minspan, spans);
+								len = encodeLZ3CFrame(data, mFrame->mIndexPixels + pixels * subframe, mPrev->mIndexPixels + 16384 * subframe, mFrame->mSubframes > 1 ? 65536 : pixels, pixels, minspan, spans);
 								if (gVerify) if (len > pixels) printf("overlong Lz3c %d +%d\n", len, len - pixels);
 
 								if (len < mFrame->mFrameDataSize[subframe])
@@ -998,7 +1012,7 @@ void output_flx(FliHeader& header, FILE* outfile)
 	hdr.tag = 0x21584c46; // 'FLX!'
 	hdr.frames = header.mFrames;
 	hdr.speed = gFramedelay;
-	hdr.config = 0; // graphics mode
+	hdr.config = gGraphicsMode; // graphics mode
 	hdr.config |= gCreateLoopFrame ? 0x8000 : 0;
 	hdr.drawoffset = 0; // offset to start drawing from
 	hdr.loopoffset = 0; // offset to 2nd frame (or 1st if there's no loop frame)

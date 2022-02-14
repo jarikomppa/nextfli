@@ -629,7 +629,7 @@ void mymemcpy(unsigned char* dst, unsigned char* src, int count)
 		*dst++ = *src++;
 }
 
-int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
+int decode_lz4(unsigned char* buf, unsigned char *srcwindow, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
 {
 	int idx = 0;
 	int ofs = 0;
@@ -646,7 +646,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 			}
 			int runofs = data[idx++];
 			runofs |= data[idx++] << 8;
-			mymemcpy(buf + ofs, buf + runofs, runlen);
+			mymemcpy(buf + ofs, srcwindow + runofs, runlen);
 			
 			ofs += runlen;
 
@@ -695,7 +695,7 @@ int decode_lz4(unsigned char* buf, unsigned char* data, int datasize, int pixels
 				}
 				int copyofs = data[idx++];
 				copyofs |= data[idx++] << 8;
-				mymemcpy(buf + ofs, buf + copyofs, copylen);
+				mymemcpy(buf + ofs, srcwindow + copyofs, copylen);
 				ofs += copylen;
 				spans++; lz2++;
 				lzlen[copylen < 8192 ? copylen : 8191]++;
@@ -802,7 +802,7 @@ int decode_lz5(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 	return idx;
 }
 
-int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
+int decode_lz6(unsigned char* buf, unsigned char* srcwindow, unsigned char* prev, unsigned char* data, int datasize, int pixels, FILE* lf = 0)
 {
 	/*
 ; op <=0 [-op][runvalue] or [-128][2 byte size][runvalue] - RLE
@@ -879,7 +879,7 @@ int decode_lz6(unsigned char* buf, unsigned char* prev, unsigned char* data, int
 				}
 				int copyofs = data[idx++];
 				copyofs |= data[idx++] << 8;
-				mymemcpy(buf + ofs, buf + copyofs, copylen);
+				mymemcpy(buf + ofs, srcwindow + copyofs, copylen);
 				ofs += copylen;
 				spans++; lz2++;
 				lzlen[copylen < 8192 ? copylen : 8191]++;
@@ -986,9 +986,13 @@ int decode_lz3c(unsigned char* buf, unsigned char* prev, unsigned char* data, in
 
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight, int aSubframe)
 {
-	int pixels = aWidth * aHeight;
+	int pixels = aWidth * aHeight / aFrame->mSubframes;
 	unsigned char* buf = new unsigned char[aWidth * aHeight];
 	memset(buf, 0xcd, aWidth * aHeight);
+	if (aSubframe == 1)
+	{
+		memcpy(buf, aFrame->mIndexPixels, pixels); // copy-from-current needs first half to be decoded
+	}
 	int readbytes = 0;
 	switch (aFrame->mFrameType[aSubframe])
 	{
@@ -1019,19 +1023,19 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight, int aSubf
 		break;		
 
 	case LZ1B:
-		readbytes = decode_lz1b(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
+		readbytes = decode_lz1b(buf + aSubframe * pixels, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ4:
-		readbytes = decode_lz4(buf, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
+		readbytes = decode_lz4(buf + aSubframe * pixels, buf + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ5:
-		readbytes = decode_lz5(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
+		readbytes = decode_lz5(buf + aSubframe * pixels, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ6:
-		readbytes = decode_lz6(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
+		readbytes = decode_lz6(buf + aSubframe * pixels, buf + aSubframe * 16384, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	case LZ3C:
-		readbytes = decode_lz3c(buf, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
+		readbytes = decode_lz3c(buf + aSubframe * pixels, aPrev->mIndexPixels + aSubframe * 16384, aFrame->mFrameData[aSubframe], aFrame->mFrameDataSize[aSubframe], pixels);
 		break;
 	default:
 		assert(0); // verify not implemented
@@ -1044,8 +1048,8 @@ int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight, int aSubf
 		printf("Block length mismatch (%d)\n", __LINE__);
 	}
 
-	for (int i = 0; i < aWidth * aHeight; i++)
-		if (aFrame->mIndexPixels[i] != buf[i])
+	for (int i = 0; i < pixels; i++)
+		if (aFrame->mIndexPixels[i + aSubframe * pixels] != buf[i + aSubframe * pixels])
 		{
 			printf("Encoding error (%d)\n", __LINE__);
 		}
@@ -1114,115 +1118,132 @@ void verifyfile(const char* fn, const char* logfilename)
 		return;	
 	}
 	int pixels = 0;
+	int subframepixels = 0;
 	switch (config & 3)
 	{
-	case 0: pixels = 192 * 256; break;
-	case 1: pixels = 320 * 256; break;
-	case 2: pixels = 320 * 256; break;
-	case 3: pixels = 96 * 128; break;
+	case 0: pixels = 192 * 256; subframepixels = pixels;  break;
+	case 1: pixels = 320 * 256; subframepixels = pixels / 2; break;
+	case 2: pixels = 320 * 256; subframepixels = pixels / 2; break;
+	case 3: pixels = 96 * 128; subframepixels = pixels; break;
 	}
 	unsigned char* f1 = new unsigned char[pixels];
 	unsigned char* f2 = new unsigned char[pixels];
 	memset(f1, 0, pixels);
 	memset(f2, 0, pixels);
+	
 
 	printf("Verifying \"%s\", %d frames, %d speed, %x config, %d drawoffs, %d loopoffs\n", fn, frames, speed, config, drawoffset, loopoffset);
 
-	int dstofs = 0, srcofs = 0;
+	int dstofs = 0, srcofs = 0;	
 	int frame = 0;
-	while ((p-data) < len && frame < frames)
+	for (int loop = 0; loop < 4; loop++)
 	{
-//		printf("Frame %d ofs %d (loopofs %d)\n", frame, p - data, loopoffset);
-		int ftype = readbyte(p);
-		int flen = 0;
-		if (ftype != FLX_NEXT && ftype != FLX_SUBFRAME)
-			flen = readword(p);
-		if (lf) fprintf(lf, "%5d:", frame);
-		switch (ftype)
+		while ((p - data) < len && frame < frames)
 		{
-		case FLX_SUBFRAME:
-			if (lf) fprintf(lf, "LFX_SUBFRAME ");
-			break;
-		case FLX_NEXT:
-			if (lf) fprintf(lf, "LFX_NEXT     ");
-			break;
-		case FLX_SAME:
-			if (lf) fprintf(lf, "LFX_SAME     ");
-			memcpy(f1 + dstofs, f2 + srcofs, pixels);
-			break;
-		case FLX_BLACK:
-			if (lf) fprintf(lf, "LFX_BLACK    ");
-			memset(f1 + dstofs, 0, pixels);
-			break;
-		case FLX_ONE:
-			if (lf) fprintf(lf, "LFX_ONE      ");
-			memset(f1 + dstofs, readbyte(p), pixels);
-			break;
-		case FLX_LZ1B:
-			if (lf) fprintf(lf, "LFX_LZ1B     ");
-			p += decode_lz1b(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
-			break;
-		case FLX_LZ4:
-			if (lf) fprintf(lf, "LFX_LZ4      ");
-			p += decode_lz4(f1 + dstofs, p, flen, pixels, lf);
-			break;
-		case FLX_LZ5:
-			if (lf) fprintf(lf, "LFX_LZ5      ");
-			p += decode_lz5(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
-			break;
-		case FLX_LZ6:
-			if (lf) fprintf(lf, "LFX_LZ6      ");
-			p += decode_lz6(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
-			break;
-		case FLX_LZ3C:
-			if (lf) fprintf(lf, "LFX_LZ3C     ");
-			p += decode_lz3c(f1 + dstofs, f2 + srcofs, p, flen, pixels, lf);
-			break;
-		default:
-			assert(0); // verify not implemented
-		}
-		if (lf) fprintf(lf, "\n");
-
-		if (ftype == FLX_SUBFRAME)
-		{
-			dstofs += 160 * 256;
-			srcofs += 16 * 1024;
-		}
-		else
-		if (ftype == FLX_NEXT)
-		{
-			unsigned char* t = f1;
-			f1 = f2;
-			f2 = t;
-			srcofs = 0;
-			dstofs = 0;
-			frame++;
-		}
-		else
-		{
-			int hash1 = readbyte(p);
-			int hash2 = readbyte(p);
-
-			unsigned char sum1 = 0;
-			unsigned char sum2 = 0;
-			for (int i = 0; i < pixels; i++)
+			//printf("Frame %d ofs %d (loopofs %d)\n", frame, p - data, loopoffset);
+			int ftype = readbyte(p);
+			//printf("%02x", ftype);
+			int flen = 0;
+			if (ftype != FLX_NEXT && ftype != FLX_SUBFRAME)
+				flen = readword(p);
+			if (lf) fprintf(lf, "%5d:", frame);
+			switch (ftype)
 			{
-				sum1 ^= f1[i];
-				sum2 += sum1;
+			case FLX_SUBFRAME:
+				if (lf) fprintf(lf, "LFX_SUBFRAME ");
+				break;
+			case FLX_NEXT:
+				if (lf) fprintf(lf, "LFX_NEXT     ");
+				break;
+			case FLX_SAME:
+				if (lf) fprintf(lf, "LFX_SAME     ");
+				memcpy(f1 + dstofs, f2 + srcofs, subframepixels);
+				break;
+			case FLX_BLACK:
+				if (lf) fprintf(lf, "LFX_BLACK    ");
+				memset(f1 + dstofs, 0, subframepixels);
+				break;
+			case FLX_ONE:
+				if (lf) fprintf(lf, "LFX_ONE      ");
+				memset(f1 + dstofs, readbyte(p), subframepixels);
+				break;
+			case FLX_LZ1B:
+				if (lf) fprintf(lf, "LFX_LZ1B     ");
+				p += decode_lz1b(f1 + dstofs, f2 + srcofs, p, flen, subframepixels, lf);
+				break;
+			case FLX_LZ4:
+				if (lf) fprintf(lf, "LFX_LZ4      ");
+				p += decode_lz4(f1 + dstofs, f1 + srcofs, p, flen, subframepixels, lf);
+				break;
+			case FLX_LZ5:
+				if (lf) fprintf(lf, "LFX_LZ5      ");
+				p += decode_lz5(f1 + dstofs, f2 + srcofs, p, flen, subframepixels, lf);
+				break;
+			case FLX_LZ6:
+				if (lf) fprintf(lf, "LFX_LZ6      ");
+				p += decode_lz6(f1 + dstofs, f1 + srcofs, f2 + srcofs, p, flen, subframepixels, lf);
+				break;
+			case FLX_LZ3C:
+				if (lf) fprintf(lf, "LFX_LZ3C     ");
+				p += decode_lz3c(f1 + dstofs, f2 + srcofs, p, flen, subframepixels, lf);
+				break;
+			default:
+				assert(0); // verify not implemented
 			}
-			if (sum1 != hash1 || sum2 != hash2)
+			if (lf) fprintf(lf, "\n");
+
+			if (ftype == FLX_SUBFRAME)
 			{
-				printf("Frame hash mismatch - frame %d, \"%s\" - frametype %d - %d,%d vs %d,%d\n", frame, fn, ftype, sum1, sum2, hash1, hash2);
+				dstofs += 160 * 256;
+				srcofs += 16 * 1024;
 			}
+			else
+				if (ftype == FLX_NEXT)
+				{
+					unsigned char* t = f1;
+					f1 = f2;
+					f2 = t;
+					srcofs = 0;
+					dstofs = 0;
+					frame++;
+				}
+				else
+				{
+					int hash1 = readbyte(p);
+					int hash2 = readbyte(p);
+
+					unsigned char sum1 = 0;
+					unsigned char sum2 = 0;
+					for (int i = 0; i < subframepixels; i++)
+					{
+						sum1 ^= f1[i + dstofs];
+						sum2 += sum1;
+					}
+					if (sum1 != hash1 || sum2 != hash2)
+					{
+						printf("Frame hash mismatch - frame %d, \"%s\" - frametype %d - %d,%d vs %d,%d\n", frame, fn, ftype, sum1, sum2, hash1, hash2);
+					}
+				}
 		}
-	}
-	if (frame < frames)
-	{
-		printf("didn't read all frames?\n");
-	}
-	if ((p - data) != len)
-	{
-		printf("didn't reach end of file?\n");
+		if (frame < frames)
+		{
+			printf("didn't read all frames?\n");
+		}
+		if ((p - data) != len)
+		{
+			printf("didn't reach end of file?\n");
+		}
+
+		if (lf && loop == 0)
+		{
+			fprintf(lf, "\nLen, Spanlen, RLElen, LZlen, Litlen\n");
+			for (int i = 0; i < 8192; i++)
+				fprintf(lf, "%d, %d, %d, %d, %d\n", i, lzlen[i] + rlelen[i] + litlen[i], rlelen[i], lzlen[i], litlen[i]);
+			fprintf(lf, "\n\n");
+		}
+
+		p = data + loopoffset;
+		frame = (config & 0x8000) ? 1 : 0;
 	}
 	delete[] data;
 	printf("Verify done.\n");

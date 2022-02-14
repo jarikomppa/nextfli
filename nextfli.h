@@ -146,11 +146,11 @@ int encodeDelta16Frame(unsigned char* data, unsigned char* aFrame, unsigned char
 int encodeDelta8Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int width, int height);
 int encodeRLEFrame(unsigned char* aRLEframe, unsigned char* aIndexPixels, int width, int height);
 
-int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int& spans);
-int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, int pixels, int minspan, int& spans);
-int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int& spans);
-int encodeLZ6Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int& spans);
-int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int pixels, int minspan, int &spans);
+int encodeLZ1bFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int srcpixels, int pixels, int minspan, int& spans);
+int encodeLZ4Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aSourceWindow, int srcpixels, int pixels, int minspan, int& spans);
+int encodeLZ5Frame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int srcpixels, int pixels, int minspan, int& spans);
+int encodeLZ6Frame(unsigned char* data, unsigned char* aSourceWindow, unsigned char* aFrame, unsigned char* aPrev, int srcpixels, int pixels, int minspan, int& spans);
+int encodeLZ3CFrame(unsigned char* data, unsigned char* aFrame, unsigned char* aPrev, int srcpixels, int pixels, int minspan, int &spans);
 
 int verify_frame(Frame* aFrame, Frame* aPrev, int aWidth, int aHeight, int aSubframe);
 
@@ -159,6 +159,6 @@ int runlength16(unsigned char* cdata, int max);
 int skiplength(unsigned char* data, unsigned char* prev, int max);
 int skiplength16(unsigned char* cdata, unsigned char* cprev, int max);
 int bestLZRun0(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, int& runofs, int max);
-int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int pixels, signed char& runofs, int max);
+int bestLZRun3(unsigned char* aFrame, unsigned char* aPrev, int ofs, int srcpixels, int dstpixels, signed char& runofs, int max);
 
 void verifyfile(const char* fn, const char * logfilename);
